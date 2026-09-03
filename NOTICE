@@ -1,16 +1,18 @@
 Third-party art
 ===============
 
-The sprites under public/kenney/ are by Kenney (https://kenney.nl) and are
+The sprites and sounds under public/kenney/ are by Kenney (https://kenney.nl) and are
 released under Creative Commons Zero (CC0 1.0 Universal), not under the MIT
 licence in LICENSE. CC0 places them in the public domain, so they carry no
 conditions of their own and nothing here restricts them further.
 
   Medieval RTS        https://kenney.nl/assets/medieval-rts
   Board Game Icons    https://kenney.nl/assets/board-game-icons
+  Interface Sounds    https://kenney.nl/assets/interface-sounds
 
 See public/kenney/CREDITS.txt for which files came from which pack.
 
 All other artwork in this project — the wonder, trade-good and library-track
 icons in src/art.ts, and every panel texture — is original work covered by the
-MIT licence.
+MIT licence. So is the background music, which is not a recording: it is
+generated at runtime by src/audio.ts.

@@ -10,11 +10,20 @@ tile/      Medieval RTS          https://kenney.nl/assets/medieval-rts
 structure/ Medieval RTS          https://kenney.nl/assets/medieval-rts
 unit/      Medieval RTS          https://kenney.nl/assets/medieval-rts
 icon/      Board Game Icons      https://kenney.nl/assets/board-game-icons
+audio/     Interface Sounds      https://kenney.nl/assets/interface-sounds
 
-Files are the unmodified 64x64 "Default size" PNGs from those packs, renamed to
-the short numeric names this project looks them up by. The mapping from these
-files to what they represent in the game lives in src/sprites.ts.
+Image files are the unmodified 64x64 "Default size" PNGs from those packs,
+renamed to the short numeric names this project looks them up by. The mapping
+from these files to what they represent lives in src/sprites.ts.
+
+Audio files are unmodified .ogg clips from Interface Sounds, renamed for what
+they do in the game (click, select, build, deny, raze, age, toggle).
 
 The remaining artwork in this project — the wonder, trade-good and library-track
 icons, and every panel texture — is original work and is not from Kenney. It
 lives in src/art.ts.
+
+The background music is not from Kenney either, and is not a recording at all:
+it is generated at runtime in WebAudio by src/audio.ts. Kenney publishes jingles
+but no looping score, and generating it avoided taking on a track under a
+different licence.

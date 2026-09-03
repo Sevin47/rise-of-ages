@@ -13,7 +13,7 @@ Play: `npm install && npm run dev`
 
 The game opens on a menu rather than dropping you straight onto a map:
 **Continue** (with a summary of the nation waiting for you), **New Nation**,
-**Import a save**, or **About**. A drifting view of a generated world plays
+**Import a save**, **Settings**, or **About**. A drifting view of a generated world plays
 behind it. You can get back to it any time from the Nation panel.
 
 ## Controls
@@ -27,6 +27,7 @@ behind it. You can get back to it any time from the Nation panel.
 | Cancel / deselect | right-click, or `Esc` |
 | Inspect a building | click it — the panel shows its real output and its crew |
 | Back to the menu | the Nation panel — it saves on the way out |
+| Sound and music | Settings, from the menu or the Nation panel |
 
 ## The loop
 
@@ -112,6 +113,26 @@ sprites are full colour and deliberately excluded from that.
 Run `npm run sheet` to regenerate `icons.html`, a contact sheet of the original
 SVG set at inspection size. It is generated, so it is not checked in.
 
+## Sound
+
+Two toggles, in Settings on the menu or in the Nation panel. They are stored
+under their own key rather than inside the save, so they survive starting a new
+nation, importing someone else's, and erasing everything — a preference belongs
+to the person at the keyboard, not to the nation.
+
+**Sound effects** are Kenney's CC0 Interface Sounds: a click on buttons, a
+different note for placing a building, being refused, razing, and a bell when an
+age turns. **Music** is generated at runtime in WebAudio — a slow four-chord turn
+in A minor with pentatonic plucks over it, written to be ignorable. Kenney
+publishes jingles but no looping score, and generating it beat taking on a track
+under a different licence: it stays original work under this project's own MIT
+licence and adds nothing to download. It defaults to off, being the more
+intrusive of the two.
+
+No AudioContext exists until the first click. Browsers refuse to start audio
+outside a user gesture, and a page nobody clicks never touches the audio
+hardware at all.
+
 ## Layout
 
 | file | what it holds |
@@ -125,6 +146,8 @@ SVG set at inspection size. It is generated, so it is not checked in.
 | `src/sprites.ts` | which Kenney sprite stands for what, and the image loader |
 | `src/ui.ts` | the overlay panels, as one string |
 | `src/art.ts` | the original SVG icons still used for wonders, trade goods and tracks |
+| `src/audio.ts` | sound effects, and the generated score behind the Music toggle |
+| `src/settings.ts` | player preferences, stored apart from the save |
 | `src/main.ts` | screen state machine (menu / playing), game loop, input, autosave |
 | `balance.ts` | dev-only (`npm run balance`): runs an autoplayer over the real sim and prints when each age falls |
 | `sheet.ts` | dev-only (`npm run sheet`): writes `icons.html`, a contact sheet of the icon set |

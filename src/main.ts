@@ -46,6 +46,8 @@ import {
   walkingCount,
   workingAt,
 } from './units';
+import { applySettings, playSfx, unlockAudio } from './audio';
+import { loadSettings, saveSettings } from './settings';
 import { preloadSprites } from './sprites';
 import { render, renderMenu, type MapInfo, type TabId, type UiState } from './ui';
 
@@ -68,7 +70,12 @@ let state: GameState | null = null;
 /** The save on disk, read once for the menu and refreshed on returning to it. */
 let savedGame: GameState | null = load();
 
-const ui: UiState = { tab: null, dialog: null };
+const ui: UiState = { tab: null, dialog: null, settings: loadSettings() };
+
+// Hand the saved preferences to the audio engine straight away. No context
+// exists yet, so this only records them — but it means the first gesture
+// unlocks audio at the player's chosen settings rather than the defaults.
+applySettings(ui.settings);
 
 const view: ViewState = {
   cam: { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1.0 },
@@ -176,6 +183,15 @@ function touch(): void {
   dirty = true;
 }
 
+// Browsers will not start audio outside a user gesture. This runs once, in the
+// capture phase, so the very click that asks for a sound has already unlocked
+// the context by the time the sound is requested.
+document.addEventListener(
+  'pointerdown',
+  () => unlockAudio(),
+  { once: true, capture: true },
+);
+
 // ------------------------------------------------------------ map input
 
 function clampCamera(): void {
@@ -252,6 +268,7 @@ canvas.addEventListener('pointerup', (ev) => {
   } else {
     const hit = placementAt(state.map, tx, ty);
     view.selected = hit ? hit.id : null;
+    if (hit) playSfx('select');
   }
   touch();
   paint();
@@ -305,12 +322,15 @@ function tryPlace(g: GameState, def: string, wx: number, wy: number): void {
           ? 'That runs off the edge of the map.'
           : `A ${BUILDING_BY_ID.get(def)?.name ?? def} cannot stand on that ground.`;
     log(g, 'warn', why);
+    playSfx('deny');
     return;
   }
   if (!payBuild(g, def)) {
     log(g, 'warn', 'Not enough in store for that yet.');
+    playSfx('deny');
     return;
   }
+  playSfx('build');
   const p = place(g.map, def, o.tx, o.ty);
   syncToState(g, g.map);
   if (p) {
@@ -367,6 +387,7 @@ function shiftLine(g: GameState, res: ResourceId, delta: number): void {
  * about deciding which one to load.
  */
 function menuClick(act: string, target: HTMLElement, ev: MouseEvent): void {
+  if (act !== 'toggle') playSfx('click');
   switch (act) {
     case 'menu-continue':
       if (savedGame) startGame(savedGame);
@@ -375,17 +396,26 @@ function menuClick(act: string, target: HTMLElement, ev: MouseEvent): void {
       startGame(newGame());
       return;
     case 'menu-new-confirm':
-      // Starting fresh over an existing run destroys it, and the save is the
-      // only copy, so this asks first.
-      if (confirm('Start a new nation? The saved nation on this browser is replaced, and there is no undo.')) {
-        startGame(newGame());
-      }
+      // Starting fresh over an existing run destroys the only copy, so this
+      // asks first. It uses the game's own dialog rather than confirm(): a
+      // native modal is suppressed in sandboxed iframes, which would make this
+      // button silently do nothing wherever the game is embedded.
+      ui.dialog = { kind: 'newgame' };
+      break;
+    case 'do-new':
+      startGame(newGame());
       return;
     case 'import':
       ui.dialog = { kind: 'import' };
       break;
     case 'about':
       ui.dialog = { kind: 'about' };
+      break;
+    case 'settings':
+      ui.dialog = { kind: 'settings' };
+      break;
+    case 'toggle':
+      toggleSetting(target.dataset.id ?? '');
       break;
     case 'do-import': {
       const box = document.getElementById('import-blob') as HTMLTextAreaElement | null;
@@ -427,6 +457,10 @@ overlay.addEventListener('click', (ev) => {
   const g = state;
   const sel = view.selected === null ? null : placementById(g.map, view.selected);
 
+  // A single click for every ordinary button. Actions with a sound of their
+  // own (placing, razing, an age turning) are excluded so they do not double up.
+  if (!['toggle', 'advance', 'raze'].includes(act)) playSfx('click');
+
   switch (act) {
     case 'to-menu':
       toMenu();
@@ -461,6 +495,7 @@ overlay.addEventListener('click', (ev) => {
       if (def?.cityLimited && (g.buildings.city ?? 0) <= 1) break;
       refundBuild(g, sel.def);
       removePlacement(g.map, sel.id);
+      playSfx('raze');
       view.selected = null;
       syncToState(g, g.map);
       break;
@@ -484,7 +519,7 @@ overlay.addEventListener('click', (ev) => {
       toggleRoute(g, id);
       break;
     case 'advance':
-      advanceAge(g);
+      if (advanceAge(g)) playSfx('age');
       break;
     case 'export':
       ui.dialog = { kind: 'export', text: exportSave(g) };
@@ -494,6 +529,12 @@ overlay.addEventListener('click', (ev) => {
       break;
     case 'about':
       ui.dialog = { kind: 'about' };
+      break;
+    case 'settings':
+      ui.dialog = { kind: 'settings' };
+      break;
+    case 'toggle':
+      toggleSetting(id);
       break;
     case 'reset':
       ui.dialog = { kind: 'reset' };
@@ -544,6 +585,18 @@ overlay.addEventListener('click', (ev) => {
   touch();
   paint();
 });
+
+/** Flip one preference, persist it, and apply it to the audio engine. */
+function toggleSetting(which: string): void {
+  if (which !== 'sound' && which !== 'music') return;
+  ui.settings = { ...ui.settings, [which]: !ui.settings[which] };
+  saveSettings(ui.settings);
+  unlockAudio();
+  applySettings(ui.settings);
+  // Confirm the switch audibly — but only when the result is sound being on,
+  // otherwise turning sound off would play a sound on its way out.
+  if (ui.settings.sound) playSfx('toggle');
+}
 
 function resetView(g: GameState): void {
   view.selected = null;

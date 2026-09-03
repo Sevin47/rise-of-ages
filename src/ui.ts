@@ -12,6 +12,7 @@ import {
   type ResourceId,
 } from './content';
 import { groundFor, type Placement } from './map';
+import type { Settings } from './settings';
 import { BUILDING_SPRITES, RESOURCE_SPRITES, spriteUrl, UNIT_SPRITES } from './sprites';
 import {
   AGE_OUTPUT_STEP,
@@ -33,7 +34,12 @@ export type TabId = 'library' | 'wonders' | 'trade' | 'nation';
 export interface UiState {
   /** Which side panel is open, or null when the map has the screen to itself. */
   tab: TabId | null;
-  dialog: null | { kind: 'export' | 'import' | 'reset' | 'about'; text?: string };
+  dialog: null | {
+    kind: 'export' | 'import' | 'reset' | 'about' | 'settings' | 'newgame';
+    text?: string;
+  };
+  /** Player preferences, so the settings dialog can draw its toggles. */
+  settings: Settings;
 }
 
 /** What the map layer knows that the overlay needs in order to draw itself. */
@@ -115,6 +121,19 @@ function buildIcon(def: string): string {
 
 function citizenIcon(): string {
   return `<img class="icon" src="${spriteUrl(UNIT_SPRITES.idle)}" alt="">`;
+}
+
+/** One labelled on/off switch. The whole row is the hit target. */
+function toggleRow(id: string, name: string, note: string, on: boolean): string {
+  return `<button class="toggle-row ${on ? 'on' : 'off'}" data-act="toggle" data-id="${id}"
+      role="switch" aria-checked="${on}">
+      <span class="toggle-text">
+        <span class="toggle-name">${name}</span>
+        <span class="toggle-note">${note}</span>
+      </span>
+      <span class="toggle-switch"><i></i></span>
+      <span class="toggle-state">${on ? 'On' : 'Off'}</span>
+    </button>`;
 }
 
 function esc(s: string): string {
@@ -518,6 +537,7 @@ function nationTab(state: GameState, d: Derived): string {
       `<div style="display:flex;gap:8px;flex-wrap:wrap">
          <button class="btn ghost small" data-act="export">Export save</button>
          <button class="btn ghost small" data-act="import">Import save</button>
+         <button class="btn ghost small" data-act="settings">Settings</button>
          <button class="btn ghost small" data-act="about">About the art</button>
          <button class="btn ghost small" data-act="to-menu">Main menu</button>
          <button class="btn ghost small" data-act="wipe">Erase everything</button>
@@ -552,6 +572,30 @@ function dialog(ui: UiState, state: GameState | null): string {
       <p>This cannot be undone.</p>`;
     actions = `<button class="btn ghost" data-act="dismiss">Not yet</button>
       <button class="btn" data-act="do-reset">Begin again</button>`;
+  } else if (d.kind === 'newgame') {
+    title = 'Start a new nation?';
+    body = `<p>The nation saved in this browser is replaced, and it is the only copy.
+      There is no undo.</p>
+      <p>If you want to keep it, close this, continue that game, and use
+      <strong>Export save</strong> in the Nation panel first.</p>`;
+    actions = `<button class="btn ghost" data-act="dismiss">Keep it</button>
+      <button class="btn" data-act="do-new">Start a new nation</button>`;
+  } else if (d.kind === 'settings') {
+    title = 'Settings';
+    body = `<div class="settings">
+      ${toggleRow(
+        'sound',
+        'Sound effects',
+        'Clicks, placing a building, and the bell when an age turns.',
+        ui.settings.sound,
+      )}
+      ${toggleRow(
+        'music',
+        'Music',
+        'A slow generated score that sits under the game. Off by default.',
+        ui.settings.music,
+      )}
+    </div>`;
   } else {
     title = 'About the art';
     body = `<p>The map, buildings, citizens and resource icons are
@@ -688,6 +732,10 @@ export function renderMenu(saved: GameState | null, ui: UiState): string {
         <button class="menu-item" data-act="import">
           <span class="menu-item-name">Import a save</span>
           <span class="menu-item-note">Paste a save exported from another browser</span>
+        </button>
+        <button class="menu-item" data-act="settings">
+          <span class="menu-item-name">Settings</span>
+          <span class="menu-item-note">Sound and music</span>
         </button>
         <button class="menu-item" data-act="about">
           <span class="menu-item-name">About</span>
