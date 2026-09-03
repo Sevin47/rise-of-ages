@@ -538,7 +538,7 @@ function nationTab(state: GameState, d: Derived): string {
          <button class="btn ghost small" data-act="export">Export save</button>
          <button class="btn ghost small" data-act="import">Import save</button>
          <button class="btn ghost small" data-act="settings">Settings</button>
-         <button class="btn ghost small" data-act="about">About the art</button>
+         <button class="btn ghost small" data-act="about">About</button>
          <button class="btn ghost small" data-act="to-menu">Main menu</button>
          <button class="btn ghost small" data-act="wipe">Erase everything</button>
        </div>`,
@@ -597,14 +597,16 @@ function dialog(ui: UiState, state: GameState | null): string {
       )}
     </div>`;
   } else {
-    title = 'About the art';
-    body = `<p>The map, buildings, citizens and resource icons are
-      <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney's</a> Medieval RTS and
-      Board Game Icons packs, released under CC0 — public domain, free for any use.
-      Credit is not required by that licence; it is given because it is deserved.</p>
+    title = 'About';
+    body = `<p>The map, buildings, citizens, resource icons and sound effects are
+      <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney's</a> Medieval RTS,
+      Board Game Icons and Interface Sounds packs, released under CC0 — public domain, free for
+      any use. Credit is not required by that licence; it is given because it is deserved.</p>
       <p>The wonder, trade-good and library-track icons, and every panel texture, are original
       work drawn as inline SVG and CSS. The parchment and stone are procedural gradients over an
       SVG turbulence filter.</p>
+      <p>The music is not a recording. Kenney publishes jingles but no looping score, so rather
+      than take on a track under a different licence it is generated as you play, in WebAudio.</p>
       <p>The game itself is MIT licensed and open source.</p>`;
   }
 
