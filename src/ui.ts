@@ -159,49 +159,6 @@ function panel(title: string, note: string, body: string): string {
 
 // ---------------------------------------------------------------- ledger
 
-function ledger(state: GameState, d: Derived): string {
-  const visible = RESOURCES.filter((r) => state.age >= r.age || state.res[r.id] > 0);
-  const chips = visible
-    .map((r) => {
-      const amount = state.res[r.id];
-      const cap = d.caps[r.id];
-      const net = d.net[r.id];
-      const fill = Math.max(0, Math.min(1, amount / cap));
-      return `<div class="res ${fill >= 0.999 ? 'full' : ''}" title="${esc(r.blurb)}">
-        <div class="chip-art">${resIcon(r.id)}</div>
-        <div class="res-text">
-          <div class="res-name">${r.name}</div>
-          <div class="res-amount">${fmt(amount)} <span style="font-size:11px;opacity:.6">/ ${fmt(cap)}</span></div>
-          <div class="res-rate ${net < 0 ? 'negative' : ''}">${rate(net)}</div>
-        </div>
-        <div class="res-bar"><i style="width:${(fill * 100).toFixed(1)}%"></i></div>
-      </div>`;
-    })
-    .join('');
-
-  const age = AGES[state.age];
-  const ready = tracksReady(state);
-  const cost = ageCost(state, d);
-  const affordable = canAfford(state, cost);
-  const last = state.age >= MAX_AGE;
-  const label = last ? 'Final Age' : ready ? 'Advance the Age' : 'Library not ready';
-
-  return `<div class="ledger">
-    <div class="panel"><div class="sheet">${chips}</div></div>
-    <div class="panel"><div class="sheet age-badge">
-      <div class="age-shield">${ROMAN[state.age]}</div>
-      <div>
-        <div class="age-name">${age.name}</div>
-        <div class="age-blurb">${esc(age.blurb)}</div>
-        <div style="margin-top:8px">
-          <button class="btn" data-act="tab" data-id="nation"
-            ${last ? 'disabled' : ''}>${label}${!last && ready && affordable ? ' ✦' : ''}</button>
-        </div>
-      </div>
-    </div></div>
-  </div>`;
-}
-
 // ----------------------------------------------------------- citizen desk
 
 function people(state: GameState, d: Derived, info: MapInfo): string {
@@ -230,7 +187,7 @@ function people(state: GameState, d: Derived, info: MapInfo): string {
 
   const warn = d.starving
     ? `<div style="margin-top:8px;color:var(--red);font-weight:600;font-size:12px">
-         The larder is empty. People are leaving — post more citizens to Food or build farms.
+         The larder is empty. People are leaving. Post more citizens to Food, or build farms.
        </div>`
     : '';
 
@@ -279,9 +236,9 @@ function buildPalette(state: GameState, d: Derived, info: MapInfo): string {
       const why = locked
         ? `Unlocks in the ${AGES[def.age].name}`
         : block === 'cities'
-          ? `${owned} / ${d.cityCap} cities — raise Civic for more`
+          ? `${owned} / ${d.cityCap} cities. Raise Civic for more`
           : block === 'slots'
-            ? 'No build slots left — found another city'
+            ? 'No build slots left. Found another city'
             : block === 'cost'
               ? 'Not enough in store'
               : `Needs ${groundNote(def.id)}`;
@@ -292,7 +249,7 @@ function buildPalette(state: GameState, d: Derived, info: MapInfo): string {
 
       return `<button class="pal ${armed ? 'armed' : ''} ${block ? 'blocked' : ''}"
         data-act="pick" data-id="${def.id}" ${locked ? 'disabled' : ''}
-        title="${esc(def.name)} — ${esc(def.blurb)}
+        title="${esc(def.name)}. ${esc(def.blurb)}
 ${esc(price)}
 ${esc(why)}">
         <span class="pal-art">${buildIcon(def.id)}</span>
@@ -400,7 +357,7 @@ function libraryTab(state: GameState, d: Derived): string {
     `${met} / ${TRACKS_NEEDED_TO_ADVANCE} tracks at level ${need}`,
     `<div class="card-blurb" style="margin:0 0 10px">
        Four tracks, one level per age. To leave an age you need at least
-       ${TRACKS_NEEDED_TO_ADVANCE} of the 4 standing at the level that matches it — no single
+       ${TRACKS_NEEDED_TO_ADVANCE} of the 4 standing at the level that matches it. No single
        track will carry you forward alone.
      </div>
      <div class="grid">${cards}</div>`,
@@ -481,7 +438,7 @@ function nationTab(state: GameState, d: Derived): string {
   const ok = !last && ready && canAfford(state, cost);
 
   const advance = last
-    ? `<div class="card-blurb">Your nation has reached the Information Age. There is no further rung —
+    ? `<div class="card-blurb">Your nation has reached the Information Age. There is no further rung, so
          start a new dynasty to carry what you learned into the next run.</div>`
     : `<div class="advance">
          <div class="card-blurb" style="margin:0">
@@ -602,7 +559,7 @@ function dialog(ui: UiState, state: GameState | null): string {
     title = 'About';
     body = `<p>The map, buildings, citizens, resource icons and sound effects are
       <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney's</a> Medieval RTS,
-      Board Game Icons and Interface Sounds packs, released under CC0 — public domain, free for
+      Board Game Icons and Interface Sounds packs, released under CC0, which puts them in the public domain. Free for
       any use. Credit is not required by that licence; it is given because it is deserved.</p>
       <p>The wonder, trade-good and library-track icons, and every panel texture, are original
       work drawn as inline SVG and CSS. The parchment and stone are procedural gradients over an
@@ -644,6 +601,20 @@ const TAB_NAMES: Record<TabId, string> = {
   nation: 'Nation',
 };
 
+/**
+ * The heads-up display, arranged the way Rise of Nations arranges one.
+ *
+ * Resources read down the top-left corner, the age sits centred above the map,
+ * population sits top-right, and the chronicle runs as bare text down the left
+ * with no panel around it. Everything you act on lives in one solid bar along
+ * the bottom: the build card on the left, the minimap in the middle, and a
+ * context panel on the right showing whatever is selected, or the workforce
+ * when nothing is.
+ *
+ * The middle of that bar is deliberately left empty. The minimap is painted
+ * onto the map canvas underneath, at coordinates measured from that hole, so it
+ * survives the overlay being rebuilt four times a second.
+ */
 export function render(state: GameState, d: Derived, ui: UiState, info: MapInfo): string {
   const tabs = (Object.keys(TAB_NAMES) as TabId[])
     .map(
@@ -660,16 +631,66 @@ export function render(state: GameState, d: Derived, ui: UiState, info: MapInfo)
   else if (ui.tab === 'trade') content = tradeTab(state, d);
   else if (ui.tab === 'nation') content = nationTab(state, d);
 
-  // Every overlay is pointer-transparent by default so drags land on the map;
-  // the panels themselves switch pointer events back on.
-  return `<div class="hud-top">${ledger(state, d)}</div>
-    <div class="hud-left">${people(state, d, info)}${chronicle(state)}</div>
-    <div class="hud-right">
-      <div class="tabs">${tabs}</div>
+  // With something selected the right of the bar reports on it; otherwise it
+  // falls back to the workforce, which is what you most often want next.
+  const context = info.selected ? selectionPanel(state, d, info) : people(state, d, info);
+
+  return `<div class="hud-res">${resourceStack(state, d)}</div>
+    <div class="hud-age">${ageBanner(state, d)}</div>
+    <div class="hud-pop">${popReadout(state, d, info)}</div>
+    <div class="hud-log">${chronicle(state)}</div>
+    <div class="hud-drawer">
       ${ui.tab ? `<div class="drawer" data-scroll="drawer">${content}</div>` : ''}
     </div>
-    <div class="hud-bottom">${selectionPanel(state, d, info)}${buildPalette(state, d, info)}</div>
+    <div class="hud-bar">
+      <div class="bar-card">${buildPalette(state, d, info)}</div>
+      <div class="bar-mid">
+        <div class="minimap-slot" id="minimap-slot"></div>
+        <div class="tabs">${tabs}</div>
+      </div>
+      <div class="bar-context" data-scroll="context">${context}</div>
+    </div>
     ${dialog(ui, state)}`;
+}
+
+/** Resources down the top-left corner: amount, cap, and the rate under it. */
+function resourceStack(state: GameState, d: Derived): string {
+  return RESOURCES.filter((r) => state.age >= r.age || state.res[r.id] > 0)
+    .map((r) => {
+      const amount = state.res[r.id];
+      const cap = d.caps[r.id];
+      const net = d.net[r.id];
+      const full = amount / cap >= 0.999;
+      return `<div class="res-row ${full ? 'full' : ''}" title="${esc(r.blurb)}">
+        <span class="res-ico">${resIcon(r.id)}</span>
+        <span class="res-num">${fmt(amount)}<span class="res-cap">/${fmt(cap)}</span></span>
+        <span class="res-net ${net < 0 ? 'negative' : ''}">${rate(net)}</span>
+      </div>`;
+    })
+    .join('');
+}
+
+function ageBanner(state: GameState, d: Derived): string {
+  const age = AGES[state.age];
+  const last = state.age >= MAX_AGE;
+  const ready = tracksReady(state);
+  const affordable = canAfford(state, ageCost(state, d));
+  const label = last ? 'Final age' : ready ? 'Advance the age' : 'Library not ready';
+  return `<div class="age-strip">
+    <span class="age-mark">${ROMAN[state.age]}</span>
+    <span class="age-title">${age.name}</span>
+    <button class="btn small" data-act="tab" data-id="nation" ${last ? 'disabled' : ''}>
+      ${label}${!last && ready && affordable ? ' •' : ''}
+    </button>
+  </div>`;
+}
+
+function popReadout(state: GameState, d: Derived, info: MapInfo): string {
+  return `<div class="pop-strip">
+    <span class="pop-ico">${citizenIcon()}</span>
+    <span class="pop-num">${Math.floor(state.citizens)}<span class="res-cap">/${d.popCap}</span></span>
+    <span class="pop-sub">${info.idle} idle${info.walking ? `, ${info.walking} walking` : ''}</span>
+  </div>`;
 }
 
 // ------------------------------------------------------------------- menu
@@ -723,7 +744,7 @@ export function renderMenu(saved: GameState | null, ui: UiState): string {
         <div class="menu-title">Rise of Ages</div>
         <div class="menu-sub">
           Carry one nation from the Ancient world to the Information Age.
-          Settle a map, build where the ground allows it, and send your people to work.
+          Where you build matters as much as what.
         </div>
       </div>
 

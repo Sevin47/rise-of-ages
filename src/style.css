@@ -25,7 +25,8 @@
   --noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.42'/></svg>");
 
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
-  --sans: 'Segoe UI', Inter, system-ui, -apple-system, sans-serif;
+  --sans: 'Trebuchet MS', 'Lucida Grande', 'Segoe UI', Tahoma, sans-serif;
+  --mono: 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
 }
 
 * {
@@ -813,14 +814,15 @@ body::before {
   z-index: 1;
   pointer-events: none;
   display: grid;
-  grid-template-columns: minmax(230px, 300px) 1fr minmax(0, auto);
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   grid-template-areas:
-    'top top top'
-    'left . right'
-    'bottom bottom bottom';
-  gap: 10px;
-  padding: 10px;
+    'res  age  pop'
+    'log  .    drawer'
+    'log  .    drawer'
+    'bar  bar  bar';
+  gap: 8px;
+  padding: 8px 8px 0;
 }
 
 #ui .panel,
@@ -830,51 +832,79 @@ body::before {
 #ui .palette,
 #ui .selection,
 #ui .backdrop,
-#ui .menu-screen {
+#ui .menu-screen,
+#ui .hud-res,
+#ui .hud-age,
+#ui .hud-pop,
+#ui .hud-bar {
   pointer-events: auto;
 }
 
-.hud-top {
-  grid-area: top;
+.hud-res {
+  grid-area: res;
 }
 
-.hud-left {
-  grid-area: left;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.hud-age {
+  grid-area: age;
+  justify-self: center;
+}
+
+.hud-pop {
+  grid-area: pop;
+}
+
+/* The chronicle runs as bare text on the map, the way an RTS event feed does.
+   No panel, no border: it is a log, not a document. */
+.hud-log {
+  grid-area: log;
   min-height: 0;
-  overflow: hidden;
+  max-width: 340px;
+  pointer-events: none;
 }
 
-.hud-right {
-  grid-area: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+.hud-drawer {
+  grid-area: drawer;
+  justify-self: end;
   min-height: 0;
+  display: flex;
+  align-items: flex-start;
 }
 
-.hud-bottom {
-  grid-area: bottom;
+.hud-bar {
+  grid-area: bar;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(300px, 26%);
+  gap: 8px;
+  align-items: stretch;
+  padding: 6px 8px 8px;
+  margin: 0 -8px;
+  background:
+    linear-gradient(180deg, rgba(58, 43, 28, 0.96), rgba(32, 23, 15, 0.99));
+  border-top: 2px solid var(--gold-dark);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.bar-mid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
+  align-items: center;
 }
 
-/* The ledger is a strip across the top rather than a two-column block. */
-.hud-top .ledger {
-  margin-bottom: 0;
+/* Left empty on purpose. The minimap is painted onto the map canvas beneath
+   this hole, at coordinates measured from it, so it survives the overlay being
+   rebuilt four times a second. */
+.minimap-slot {
+  width: 190px;
+  height: 128px;
+  border: 2px solid var(--gold-dark);
+  background: transparent;
 }
 
-.hud-left .panel-body {
-  max-height: 34vh;
+.bar-context {
+  min-width: 0;
   overflow-y: auto;
-}
-
-.hud-left .log {
-  max-height: 22vh;
+  max-height: 176px;
 }
 
 .drawer {
@@ -1369,4 +1399,229 @@ img.icon.inked {
     width: 22px;
     height: 22px;
   }
+}
+
+/* ================================================= Rise of Nations HUD bits */
+
+/* Resource readout, top-left. Numbers are tabular so the column does not jitter
+   as values change; that jitter is one of the things that reads as sloppy. */
+.hud-res {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  background: linear-gradient(180deg, rgba(46, 34, 22, 0.92), rgba(28, 20, 13, 0.94));
+  border: 1px solid var(--gold-dark);
+}
+
+.res-row {
+  display: grid;
+  grid-template-columns: 18px minmax(72px, auto) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-ico {
+  width: 18px;
+  height: 18px;
+}
+
+.res-ico img.icon.inked {
+  filter: brightness(0) invert(1) opacity(0.78);
+}
+
+.res-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--parchment);
+}
+
+.res-cap {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.5;
+}
+
+.res-net {
+  font-size: 10.5px;
+  color: #93c07a;
+  text-align: right;
+}
+
+.res-net.negative {
+  color: #e08a72;
+}
+
+.res-row.full .res-num {
+  color: var(--gold-light);
+}
+
+/* Age banner, centred over the map. */
+.age-strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 12px 4px 6px;
+  background: linear-gradient(180deg, rgba(46, 34, 22, 0.92), rgba(28, 20, 13, 0.94));
+  border: 1px solid var(--gold-dark);
+}
+
+.age-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(180deg, var(--gold-light), var(--gold));
+  color: #3a2a10;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.age-title {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--parchment);
+  white-space: nowrap;
+}
+
+/* Population, top-right. */
+.pop-strip {
+  display: grid;
+  grid-template-columns: 20px auto;
+  grid-template-areas: 'ico num' 'ico sub';
+  align-items: center;
+  gap: 0 7px;
+  padding: 4px 10px;
+  background: linear-gradient(180deg, rgba(46, 34, 22, 0.92), rgba(28, 20, 13, 0.94));
+  border: 1px solid var(--gold-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.pop-ico {
+  grid-area: ico;
+  width: 20px;
+  height: 20px;
+}
+
+.pop-num {
+  grid-area: num;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--parchment);
+}
+
+.pop-sub {
+  grid-area: sub;
+  font-size: 10.5px;
+  color: rgba(232, 220, 192, 0.6);
+  white-space: nowrap;
+}
+
+/* Chronicle as a bare event feed over the map. */
+.hud-log .panel,
+.hud-log .sheet {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.hud-log .panel-title {
+  display: none;
+}
+
+.hud-log .log {
+  max-height: 30vh;
+  overflow: hidden;
+}
+
+.hud-log .log > div {
+  color: #f0e4c4;
+  font-size: 11.5px;
+  line-height: 1.45;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 4px rgba(0, 0, 0, 0.7);
+  border: none;
+  padding: 1px 0;
+  background: none;
+}
+
+/* The bar's own panels drop their standalone chrome; the bar is the frame. */
+.hud-bar .panel,
+.hud-bar .selection {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  border: none;
+}
+
+.hud-bar .panel > .sheet,
+.hud-bar .selection > .sheet {
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.hud-bar .palette {
+  border-radius: 0;
+  box-shadow: none;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  background: rgba(20, 15, 10, 0.5);
+  height: 100%;
+}
+
+.hud-bar .palette-row {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 132px;
+}
+
+/* Command-card buttons: square and angular, not rounded cards. */
+.hud-bar .pal {
+  border-radius: 0;
+  flex-direction: column;
+  gap: 2px;
+  width: 74px;
+  padding: 4px 3px;
+  text-align: center;
+}
+
+.hud-bar .pal-text {
+  align-items: center;
+}
+
+.hud-bar .pal-name {
+  font-size: 10px;
+}
+
+.hud-bar .pal-cost {
+  font-size: 9px;
+}
+
+.hud-bar .tabs {
+  gap: 3px;
+}
+
+.hud-bar .tab {
+  border-radius: 0;
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+.hud-drawer .drawer {
+  max-height: 58vh;
+  width: min(430px, 38vw);
+}
+
+#minimap {
+  position: fixed;
+  z-index: 2;
+  pointer-events: none;
+  display: none;
 }

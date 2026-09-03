@@ -18,9 +18,9 @@ export interface ResourceDef {
 export const RESOURCES: ResourceDef[] = [
   { id: 'food', name: 'Food', age: 0, baseCap: 500, blurb: 'Feeds your citizens. Run out and they start leaving.' },
   { id: 'timber', name: 'Timber', age: 0, baseCap: 500, blurb: 'The bones of every building you will ever raise.' },
-  { id: 'metal', name: 'Metal', age: 0, baseCap: 300, blurb: 'Tools, then machines, then everything after.' },
+  { id: 'metal', name: 'Metal', age: 0, baseCap: 300, blurb: 'Tools first. Machines after that.' },
   { id: 'wealth', name: 'Wealth', age: 0, baseCap: 300, blurb: 'Coin. Buys what your land cannot grow.' },
-  { id: 'knowledge', name: 'Knowledge', age: 0, baseCap: 250, blurb: 'The only currency that buys a new age.' },
+  { id: 'knowledge', name: 'Knowledge', age: 0, baseCap: 250, blurb: 'No age arrives without it.' },
   { id: 'oil', name: 'Oil', age: 5, baseCap: 400, blurb: 'Nothing in the modern world moves without it.' },
 ];
 
@@ -44,19 +44,19 @@ export const TRACKS_NEEDED_TO_ADVANCE = 3;
 export const AGES: AgeDef[] = [
   {
     name: 'Ancient Age',
-    blurb: 'A few huts, a river, and more forest than you can cut.',
+    blurb: 'A few huts by a river, with more forest than you can cut.',
     tint: '#8a6f4a',
     cost: { food: 400, timber: 400, metal: 150, knowledge: 150 },
   },
   {
     name: 'Classical Age',
-    blurb: 'Roads, coin, and the first buildings meant to outlive their builders.',
+    blurb: 'Roads and coinage. The first buildings meant to outlive their builders.',
     tint: '#a8794a',
     cost: { food: 13000, timber: 13000, metal: 6600, wealth: 4200, knowledge: 5400 },
   },
   {
     name: 'Medieval Age',
-    blurb: 'Stone walls, guilds, and universities that argue with the temple.',
+    blurb: 'Guilds behind stone walls, and universities that argue with the temple.',
     tint: '#7a4a52',
     cost: { food: 72000, timber: 72000, metal: 42000, wealth: 30000, knowledge: 33000 },
   },
@@ -68,7 +68,7 @@ export const AGES: AgeDef[] = [
   },
   {
     name: 'Enlightenment Age',
-    blurb: 'Measurement, banking, and the conviction that everything is knowable.',
+    blurb: 'Measurement and banking, run by people certain that everything is knowable.',
     tint: '#4a6a72',
     cost: { food: 2.5e6, timber: 2.5e6, metal: 1.7e6, wealth: 1.4e6, knowledge: 1.3e6 },
   },
@@ -80,7 +80,7 @@ export const AGES: AgeDef[] = [
   },
   {
     name: 'Modern Age',
-    blurb: 'Grids, assembly lines, and a century that moves faster than its laws.',
+    blurb: 'Power grids and assembly lines, in a century moving faster than its laws.',
     tint: '#3f5a6b',
     cost: { food: 6.8e7, timber: 6.8e7, metal: 5.2e7, wealth: 4.4e7, knowledge: 3.6e7, oil: 1.6e6 },
   },
@@ -112,7 +112,7 @@ export const TRACKS: TrackDef[] = [
     id: 'civic',
     name: 'Civic',
     icon: 'civic',
-    blurb: 'Law, census and citizenship. How many people your nation can hold.',
+    blurb: 'Law and the census. Decides how many people your nation can hold.',
     perLevel: '+14 population cap, +4% citizen output, +1 city you may found',
     with: 'food',
   },
@@ -120,7 +120,7 @@ export const TRACKS: TrackDef[] = [
     id: 'commerce',
     name: 'Commerce',
     icon: 'commerce',
-    blurb: 'Weights, coinage and roads. How much you can hold and what it fetches.',
+    blurb: 'Weights and coinage, so you can hold more and sell it for more.',
     perLevel: 'storage x1.6 on every resource, +8% Wealth, +1 trade route every other level',
     with: 'wealth',
   },
@@ -128,7 +128,7 @@ export const TRACKS: TrackDef[] = [
     id: 'science',
     name: 'Science',
     icon: 'science',
-    blurb: 'Writing, method and instruments. Research feeding on itself.',
+    blurb: 'Writing and method. Research that feeds on itself.',
     perLevel: '+12% Knowledge, research costs -7%, age advance costs -4%',
     with: 'metal',
   },
@@ -136,7 +136,7 @@ export const TRACKS: TrackDef[] = [
     id: 'craft',
     name: 'Craft',
     icon: 'craft',
-    blurb: 'Kilns, mills and machine tools. Every building does more with less.',
+    blurb: 'Kilns and machine tools. Every building does more with less.',
     perLevel: '+11% output from every building, construction costs -5%',
     with: 'timber',
   },
@@ -209,7 +209,7 @@ export const BUILDINGS: BuildingDef[] = [
     name: 'City',
     icon: 'city',
     age: 0,
-    blurb: 'A new settlement. Room for more people, more building, more everything.',
+    blurb: 'A new settlement, with room for more people and more building.',
     // Deliberately priced in Food and Timber only. Expansion is the escape hatch
     // when your build slots are full, so it must never depend on a resource you
     // might have no room left to produce.
@@ -295,7 +295,7 @@ export const BUILDINGS: BuildingDef[] = [
     name: 'Warehouse',
     icon: 'warehouse',
     age: 1,
-    blurb: 'Crates, ledgers and a lock. Metal, Wealth and Knowledge stop overflowing.',
+    blurb: 'Crates and a lock. Metal, Wealth and Knowledge stop overflowing.',
     cost: { timber: 260, metal: 130 },
     growth: 1.55,
     effects: {

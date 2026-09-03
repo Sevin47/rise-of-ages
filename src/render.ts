@@ -283,6 +283,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     drawWorkers(map, vx, vy, vw, vh);
 
     g.restore();
+
   }
 
   function drawPlacements(
@@ -385,5 +386,41 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
-  return { draw, screenToWorld };
+  /**
+   * Paint the minimap into its own canvas. Buildings become pips because their
+   * sprites would be mud at this scale, and the white box shows where the
+   * camera is looking.
+   */
+  function drawMinimap(mini: HTMLCanvasElement, map: GameMap, view: ViewState): void {
+    if (!baked) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = mini.clientWidth;
+    const h = mini.clientHeight;
+    if (!w || !h) return;
+    if (mini.width !== Math.round(w * dpr) || mini.height !== Math.round(h * dpr)) {
+      mini.width = Math.round(w * dpr);
+      mini.height = Math.round(h * dpr);
+    }
+    const m = mini.getContext('2d')!;
+    m.setTransform(dpr, 0, 0, dpr, 0, 0);
+    m.clearRect(0, 0, w, h);
+    m.drawImage(baked, 0, 0, WORLD_W, WORLD_H, 0, 0, w, h);
+
+    const sx = w / WORLD_W;
+    const sy = h / WORLD_H;
+
+    for (const p of map.placements) {
+      const size = p.def === 'city' ? 4 : 3;
+      m.fillStyle = p.def === 'city' ? '#ffd94a' : '#ffb454';
+      m.fillRect((p.tx + 0.5) * TILE * sx - size / 2, (p.ty + 0.5) * TILE * sy - size / 2, size, size);
+    }
+
+    const cw = canvas.clientWidth / view.cam.zoom;
+    const ch = canvas.clientHeight / view.cam.zoom;
+    m.strokeStyle = 'rgba(255,255,255,0.9)';
+    m.lineWidth = 1;
+    m.strokeRect((view.cam.x - cw / 2) * sx, (view.cam.y - ch / 2) * sy, cw * sx, ch * sy);
+  }
+
+  return { draw, drawMinimap, screenToWorld };
 }

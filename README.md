@@ -16,6 +16,13 @@ The game opens on a menu rather than dropping you straight onto a map:
 **Import a save**, **Settings**, or **About**. A drifting view of a generated world plays
 behind it. You can get back to it any time from the Nation panel.
 
+The HUD follows the Rise of Nations arrangement: resources down the top-left,
+the age centred above the map, population top-right, the chronicle running as
+bare text over the terrain, and everything you act on in one bar along the
+bottom. That bar holds the build card on the left, the minimap in the middle,
+and a context panel on the right showing whatever is selected, or the workforce
+when nothing is.
+
 ## Controls
 
 | | |

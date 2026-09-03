@@ -13,6 +13,11 @@
     <!-- The map owns the whole window; every panel is an overlay on top of it. -->
     <canvas id="map"></canvas>
     <div id="ui"></div>
+    <!-- Sits above the HUD rather than behind it. The bar's background is
+         opaque, so a "hole" in it would still cover anything drawn on the map
+         canvas underneath. Being its own element also means the overlay's
+         four-times-a-second innerHTML rebuild cannot destroy it. -->
+    <canvas id="minimap"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

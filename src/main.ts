@@ -53,6 +53,7 @@ import { render, renderMenu, type MapInfo, type TabId, type UiState } from './ui
 
 const canvas = document.getElementById('map') as HTMLCanvasElement;
 const overlay = document.getElementById('ui')!;
+const minimap = document.getElementById('minimap') as HTMLCanvasElement;
 const renderer = createRenderer(canvas);
 
 /**
@@ -198,7 +199,31 @@ function paint(): void {
     el.scrollLeft = saved[1];
   }
 
+  placeMinimap();
   dirty = false;
+}
+
+/**
+ * Move the minimap canvas onto the slot the HUD reserved for it. The overlay is
+ * rebuilt constantly, so the slot is a different element each paint and has to
+ * be measured again rather than cached. The menu has no slot, so it hides.
+ */
+function placeMinimap(): void {
+  const slot = document.getElementById('minimap-slot');
+  if (!slot) {
+    minimap.style.display = 'none';
+    return;
+  }
+  const r = slot.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) {
+    minimap.style.display = 'none';
+    return;
+  }
+  minimap.style.display = 'block';
+  minimap.style.left = `${r.x}px`;
+  minimap.style.top = `${r.y}px`;
+  minimap.style.width = `${r.width}px`;
+  minimap.style.height = `${r.height}px`;
 }
 
 function touch(): void {
@@ -702,6 +727,7 @@ function frame(now: number): void {
   tick(g, dt);
 
   renderer.draw(g.map, view);
+  if (minimap.style.display !== 'none') renderer.drawMinimap(minimap, g.map, view);
 
   sinceOverlay += dt;
   sinceSave += dt;
