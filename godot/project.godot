@@ -1,0 +1,14 @@
+; Minimal project so GDScript `class_name` declarations resolve. The spike is
+; headless: there is no scene, no window, and no rendering.
+
+config_version=5
+
+[application]
+
+config/name="Rise of Ages (sim spike)"
+config/features=PackedStringArray("4.3")
+run/disable_stdout=false
+
+[debug]
+
+gdscript/warnings/untyped_declaration=0

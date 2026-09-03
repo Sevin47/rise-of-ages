@@ -3,3 +3,5 @@ dist
 tmp
 icons.html
 .assets-src
+.tools
+godot/.godot
