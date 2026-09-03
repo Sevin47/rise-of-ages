@@ -166,4 +166,5 @@ The code is [MIT](LICENSE) — use it, change it, ship it, commercially or not.
 
 The sprites under `public/kenney/` are Kenney's and are CC0, which is public
 domain rather than MIT; they carry no conditions at all. Every other piece of
-artwork here is original and falls under the MIT licence with the rest.
+artwork here is original and falls under the MIT licence with the rest. See
+[NOTICE](NOTICE) for the breakdown.
