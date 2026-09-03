@@ -113,6 +113,9 @@ function driftMenuCamera(dt: number): void {
   menuView.cam.y = WORLD_H / 2 + Math.sin(menuT * 0.031) * slackY;
 }
 
+/** Opening of the time-away line, used to recognise and replace an older one. */
+const AWAY_PREFIX = 'While you were gone your nation kept working';
+
 /** Leave the menu and begin playing the given nation. */
 function startGame(next: GameState): void {
   state = next;
@@ -121,14 +124,16 @@ function startGame(next: GameState): void {
   // Time away is credited on entering the game, not on page load: the player
   // may have sat on the menu for a while, and that counts as being away too.
   const away = offlineCatchUp(next, Date.now() - next.savedAt);
+
+  // Every trip out to the menu counts as another absence, so these pile up
+  // until they are the entire chronicle. Only the current one tells you
+  // anything, so clear the old ones first whether or not a new one follows.
+  next.log = next.log.filter((l) => !l.msg.startsWith(AWAY_PREFIX));
+
   if (away > 60) {
     const hours = Math.floor(away / 3600);
     const mins = Math.round((away % 3600) / 60);
-    log(
-      next,
-      'age',
-      `While you were gone your nation kept working for ${hours ? `${hours}h ` : ''}${mins}m at half pace.`,
-    );
+    log(next, 'age', `${AWAY_PREFIX} for ${hours ? `${hours}h ` : ''}${mins}m at half pace.`);
   }
 
   // Reconcile the map into the economy before the first painted frame, so it

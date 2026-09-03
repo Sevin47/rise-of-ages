@@ -161,54 +161,46 @@ function panel(title: string, note: string, body: string): string {
 
 // ----------------------------------------------------------- citizen desk
 
+/**
+ * The workforce, shown in the bar whenever nothing is selected.
+ *
+ * This replaces a full panel that gave every resource line two rows and a
+ * five-button stepper. It did not fit the bar and had to be scrolled, which is
+ * useless for something read at a glance mid-game. One line per resource now,
+ * and only the two buttons anyone reaches for.
+ */
 function people(state: GameState, d: Derived, info: MapInfo): string {
   const rows = RESOURCES.filter((r) => d.slots[r.id] > 0)
     .map((r) => {
       const posted = state.jobs[r.id];
-      const perHead = d.gross[r.id];
-      return `<div class="job">
-        <div class="job-art">${resIcon(r.id)}</div>
-        <div class="job-text">
-          <div class="job-name">${r.name}</div>
-          <div class="job-meta">${fmt(perHead)}/s · ${posted}/${d.slots[r.id]} posted</div>
-        </div>
-        <div class="stepper">
-          <button class="btn small" data-act="job" data-id="${r.id}" data-d="-5" ${posted <= 0 ? 'disabled' : ''}>«</button>
-          <button class="btn small" data-act="job" data-id="${r.id}" data-d="-1" ${posted <= 0 ? 'disabled' : ''}>−</button>
-          <span class="count">${posted}</span>
-          <button class="btn small" data-act="job" data-id="${r.id}" data-d="1"
-            ${info.idle <= 0 || posted >= d.slots[r.id] ? 'disabled' : ''}>+</button>
-          <button class="btn small" data-act="job" data-id="${r.id}" data-d="5"
-            ${info.idle <= 0 || posted >= d.slots[r.id] ? 'disabled' : ''}>»</button>
-        </div>
+      const full = posted >= d.slots[r.id];
+      return `<div class="crew-row">
+        <span class="crew-ico">${resIcon(r.id)}</span>
+        <span class="crew-name">${r.name}</span>
+        <span class="crew-rate">${fmt(d.gross[r.id])}/s</span>
+        <span class="crew-posted">${posted}/${d.slots[r.id]}</span>
+        <button class="btn small" data-act="job" data-id="${r.id}" data-d="-1"
+          ${posted <= 0 ? 'disabled' : ''} aria-label="Recall one from ${r.name}">&minus;</button>
+        <button class="btn small" data-act="job" data-id="${r.id}" data-d="1"
+          ${info.idle <= 0 || full ? 'disabled' : ''} aria-label="Post one to ${r.name}">+</button>
       </div>`;
     })
     .join('');
 
-  const warn = d.starving
-    ? `<div style="margin-top:8px;color:var(--red);font-weight:600;font-size:12px">
-         The larder is empty. People are leaving. Post more citizens to Food, or build farms.
-       </div>`
-    : '';
-
-  return panel(
-    'The People',
-    `${info.idle} idle`,
-    `<div class="people">
-      <div class="chip-art">${citizenIcon()}</div>
-      <div>
-        <div class="people-count">${Math.floor(state.citizens)} <span style="font-size:13px;opacity:.6">/ ${d.popCap}</span></div>
-        <div class="people-sub">${rate(d.growthPerSec)} growth · eats ${d.upkeep.toFixed(2)} food/s</div>
-        ${info.walking ? `<div class="people-sub walking">${info.walking} on the road</div>` : ''}
-      </div>
+  return `<div class="crew">
+    <div class="crew-head">
+      <span class="crew-title">Workforce</span>
+      <span class="crew-sum">${info.idle} idle${info.walking ? `, ${info.walking} walking` : ''}</span>
+      <button class="btn ghost small" data-act="auto" ${info.idle <= 0 ? 'disabled' : ''}>Send to work</button>
+      <button class="btn ghost small" data-act="recall">Recall all</button>
     </div>
-    ${rows || '<div class="people-sub">Build something for them to work at.</div>'}
-    ${warn}
-    <div style="display:flex;gap:6px;margin-top:10px">
-      <button class="btn ghost small wide" data-act="auto">Send to work</button>
-      <button class="btn ghost small wide" data-act="recall">Recall all</button>
-    </div>`,
-  );
+    ${rows || '<div class="crew-empty">Nothing to work at yet. Put up a farm or a camp.</div>'}
+    ${
+      d.starving
+        ? '<div class="crew-warn">The larder is empty and people are leaving. Post more to Food, or build farms.</div>'
+        : ''
+    }
+  </div>`;
 }
 
 function chronicle(state: GameState): string {
@@ -247,23 +239,25 @@ function buildPalette(state: GameState, d: Derived, info: MapInfo): string {
         .map(([r, v]) => `${fmt(v as number)} ${r}`)
         .join(' · ');
 
+      // Icon and a count, with everything else in the tooltip. A name and a
+      // price cannot fit a command-card button at any size that still lets the
+      // whole card show at once; trying spilled the text outside the button.
       return `<button class="pal ${armed ? 'armed' : ''} ${block ? 'blocked' : ''}"
         data-act="pick" data-id="${def.id}" ${locked ? 'disabled' : ''}
-        title="${esc(def.name)}. ${esc(def.blurb)}
+        aria-label="${esc(def.name)}"
+        title="${esc(def.name)}
+${esc(def.blurb)}
 ${esc(price)}
 ${esc(why)}">
         <span class="pal-art">${buildIcon(def.id)}</span>
-        <span class="pal-text">
-          <span class="pal-name">${def.name}${owned ? ` <b>${owned}</b>` : ''}</span>
-          <span class="pal-cost">${price}</span>
-        </span>
+        ${owned ? `<span class="pal-count">${owned}</span>` : ''}
       </button>`;
     })
     .join('');
 
   const hint = info.ghost
     ? `Click the map to place your ${esc(BUILDING_BY_NAME(info.ghost))}. Right-click or Esc to cancel.`
-    : 'Pick a building, then click where it should stand.';
+    : 'Hover a building to see what it does. Click one, then click the map.';
 
   return `<div class="palette">
     <div class="palette-hint">${hint}</div>
@@ -648,7 +642,7 @@ export function render(state: GameState, d: Derived, ui: UiState, info: MapInfo)
         <div class="minimap-slot" id="minimap-slot"></div>
         <div class="tabs">${tabs}</div>
       </div>
-      <div class="bar-context" data-scroll="context">${context}</div>
+      <div class="bar-context">${context}</div>
     </div>
     ${dialog(ui, state)}`;
 }
