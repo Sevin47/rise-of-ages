@@ -62,11 +62,26 @@ what made the ground tessellate.
 - **The buildings are modern.** That pack is a city set. It is a placeholder;
   a medieval isometric set would have to come from elsewhere.
 - **Hills still read as roads.** Kenney's stone plateau has kerbed edges that
-  only show once it is tiled.
-- **The buildings are still Kenney's modern city set**, and they read as
-  open-topped boxes. 2DPIXX's village tileset in `assets/pixx/` is medieval and
-  much better looking, but it is modular walls and roofs, so using it means
-  assembling each building rather than picking a sprite.
+  only show once it is tiled. This is the last obviously wrong asset.
+- **Roofs overhang more than they should**, because a building is one column of
+  cells rather than walls arranged around its whole footprint.
+
+### Assembling the buildings
+
+The village tileset has no whole buildings in it: it is masonry, walls, doors,
+roofs and a chimney, meant to be stacked. `RECIPES` in `iso_probe.gd` is that
+stacking, a list of layers per building.
+
+The geometry it relies on was measured off the sheet rather than guessed, and
+it is simple once known: every 128x128 cell is drawn around a ground diamond
+whose centre sits at y=96 in the cell, a stone base rises 60 pixels above that
+ground, and a wall 64. A layer's lift is the sum of what is under it.
+
+One thing that is easy to get wrong: every layer of a building has to sort as a
+single object. Left to itself, Godot sorts each sprite by its own Y, and a roof
+sits higher up the screen than the walls under it, so it sorts *behind* them
+and disappears. Each building is therefore one node positioned at its ground
+point, with the layers as children.
 
 ### Where the characters came from
 

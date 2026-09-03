@@ -35,16 +35,47 @@ const LAND := {
 	WorldMap.DESERT: ["res://assets/land/059.png"],  # sand
 }
 
-## The buildings pack is modular: a storey and a roof, stacked. One of each
-## makes a whole building, which is why these come in pairs.
-const BUILDING_ART := {
-	"city": ["res://assets/build/041.png", "res://assets/build/090.png"],
-	"farm": ["res://assets/build/023.png", "res://assets/build/069.png"],
-	"camp": ["res://assets/build/045.png", "res://assets/build/083.png"],
-	"mine": ["res://assets/build/035.png", "res://assets/build/080.png"],
-	"market": ["res://assets/build/026.png", "res://assets/build/070.png"],
-	"library": ["res://assets/build/052.png", "res://assets/build/091.png"],
-	"temple": ["res://assets/build/049.png", "res://assets/build/082.png"],
+## Buildings are assembled out of the 2DPIXX village tileset rather than taken
+## whole, because that pack has no whole buildings: it is masonry, walls, doors
+## and roofs meant to be stacked.
+##
+## The geometry that makes stacking work, measured off the sheet rather than
+## guessed: every 128x128 cell is drawn around a ground diamond whose centre
+## sits at y=96 in the cell. A stone base rises 60px above that ground, and a
+## wall 64px. So a layer's lift is just the sum of what is underneath it.
+const PIXX_CELL := 128.0
+const PIXX_GROUND_Y := 96.0
+const BASE_H := 60.0
+const WALL_H := 64.0
+
+## Cells in the 7x7 village sheet, as (column, row).
+const C_STONE := Vector2i(0, 0)   # paved stone cube, the foundation
+const C_WALL := Vector2i(1, 2)    # two walls meeting at a post
+const C_GABLE := Vector2i(2, 5)   # pitched red roof
+const C_GABLE_B := Vector2i(1, 6) # pitched red roof, facing the other way
+const C_FLATROOF := Vector2i(4, 6) # red roof over a low wall
+const C_CHIMNEY := Vector2i(2, 6)
+const C_DOOR := Vector2i(5, 3)
+
+## Each building is a stack of [cell, lift] layers, bottom first.
+const RECIPES := {
+	# Squat huts: a foundation with a roof straight on top.
+	"farm": [[C_STONE, 0.0], [C_GABLE_B, BASE_H]],
+	"camp": [[C_STONE, 0.0], [C_FLATROOF, BASE_H]],
+	"mine": [[C_STONE, 0.0], [C_FLATROOF, BASE_H]],
+	# Walled buildings: foundation, walls, then the roof over them.
+	"market": [[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE, BASE_H + WALL_H]],
+	"library": [[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE_B, BASE_H + WALL_H]],
+	"temple": [
+		[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE, BASE_H + WALL_H],
+		[C_CHIMNEY, BASE_H + WALL_H + 34.0],
+	],
+	# The city is the landmark, but two storeys on a foundation made a tower
+	# rather than a keep. One storey, and let the larger footprint carry it.
+	"city": [
+		[C_STONE, 0.0], [C_WALL, BASE_H], [C_DOOR, BASE_H],
+		[C_GABLE, BASE_H + WALL_H],
+	],
 }
 
 ## How far a storey lifts the roof above the ground plane.
@@ -144,29 +175,43 @@ func _draw_ground(parent: Node2D) -> void:
 			parent.add_child(s)
 
 
+## Draw one cell of the village sheet with its ground diamond on `at`.
+func _pixx_layer(parent: Node2D, sheet: Texture2D, cell: Vector2i, at: Vector2, lift: float, k: float) -> void:
+	var s := Sprite2D.new()
+	s.texture = sheet
+	s.region_enabled = true
+	s.region_rect = Rect2(cell.x * PIXX_CELL, cell.y * PIXX_CELL, PIXX_CELL, PIXX_CELL)
+	s.centered = false
+	s.scale = Vector2(k, k)
+	s.position = Vector2(
+		at.x - (PIXX_CELL / 2.0) * k,
+		at.y - PIXX_GROUND_Y * k - lift * k
+	)
+	# Every layer of one building sorts as a single object. Without this the
+	# roof sorts below the walls, because its own Y is higher up the screen.
+	s.y_sort_enabled = false
+	parent.add_child(s)
+
+
 func _draw_buildings(parent: Node2D, built: Array[Dictionary]) -> void:
+	var sheet: Texture2D = load(VILLAGE_SHEET)
 	for p in built:
-		var pair: Array = BUILDING_ART.get(p["def"], BUILDING_ART["farm"])
 		var n := WorldMap.footprint(p["def"])
-		# Sit it on the centre of its footprint. The sum of the coordinates is
-		# the sort key, so a building drawn at its centre correctly overlaps the
-		# ground behind it and is overlapped by whatever is in front.
 		var mid := to_screen(p["tx"] + (n - 1) / 2.0, p["ty"] + (n - 1) / 2.0)
 
-		var storey: Texture2D = load(pair[0])
-		var floor_sprite := Sprite2D.new()
-		floor_sprite.texture = storey
-		floor_sprite.centered = false
-		floor_sprite.position = ground_anchor(storey, mid)
-		parent.add_child(floor_sprite)
+		# A cell is 128 wide against the landscape's 132, and a building should
+		# roughly fill the ground it stands on rather than perch on one tile of
+		# it, so the footprint scales it too.
+		var k := (TILE_W / PIXX_CELL) * (1.3 if n <= 2 else 1.75)
 
-		# The roof stacks on top of the storey, one wall height up.
-		var roof: Texture2D = load(pair[1])
-		var roof_sprite := Sprite2D.new()
-		roof_sprite.texture = roof
-		roof_sprite.centered = false
-		roof_sprite.position = ground_anchor(roof, mid) - Vector2(0.0, WALL_HEIGHT)
-		parent.add_child(roof_sprite)
+		# One parent per building, so the whole stack sorts together against
+		# the ground and against other buildings.
+		var group := Node2D.new()
+		group.position = Vector2(0.0, mid.y)
+		parent.add_child(group)
+
+		for layer in RECIPES.get(p["def"], RECIPES["farm"]):
+			_pixx_layer(group, sheet, layer[0], Vector2(mid.x, 0.0), layer[1], k)
 
 
 func _draw_citizens(parent: Node2D, built: Array[Dictionary]) -> void:
