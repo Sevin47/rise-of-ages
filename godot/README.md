@@ -157,11 +157,32 @@ The ground layer is deliberately *not* y-sorted: it is always behind
 everything, and sorting three thousand static tiles every frame would cost real
 time and buy nothing.
 
+### Progression
+
+The library and the ages are wired in, so there is an arc rather than a
+sandbox. Four tracks, one level per age; leaving an age needs three of the four
+standing at the level that matches it, which is what stops a player rushing one
+track and skipping the tree. Advancing multiplies every building's output and
+every store by 3.2, and that step is what meets age prices climbing roughly
+six-fold a rung.
+
+`verify.gd` checks this rather than assuming it:
+
+    age gate   tracks_ready=false at age 0
+               advancing with no research: false (expected false)
+    research   4 tracks taken to level 1
+    advance    Ancient Age -> Classical Age (true)
+    output     food gross 0.915 -> 2.927  = x3.20 (expected x3.2)
+    unlocks    warehouse now buildable: true
+
+The gate refuses first, then the multiplier lands exactly on 3.2, and a
+building gated to the new age becomes available. The build bar greys out what
+is locked or unaffordable and says why in the tooltip.
+
 ### Not there yet
 
-No save or load, no library, wonders or trade, no ages beyond the first, and no
-menu. Those are all in the TypeScript build and none of them are hard; this
-spike was about proving the loop, and the loop runs.
+No save or load, no wonders or trade routes, and no menu. All exist in the
+TypeScript build and none are hard.
 
 ## Running it
 

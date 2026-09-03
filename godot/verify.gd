@@ -68,7 +68,58 @@ func _init() -> void:
 			moved += 1
 	print("at work    %d citizens standing at a site" % moved)
 
-	await RenderingServer.frame_post_draw
+	# --- progression -----------------------------------------------------
+	# Stock the stores directly. This is a harness, not play: the point is to
+	# exercise research and the age gate, not to sit through earning it.
+	for id in Content.RESOURCE_IDS:
+		game.state["res"][id] = 1.0e6
+
+	print("")
+	print("age gate   tracks_ready=%s at age %d" % [
+		Sim.tracks_ready(game.state), game.state["age"]
+	])
+	var blocked := Sim.advance_age(game.state)
+	print("           advancing with no research: %s (expected false)" % blocked)
+
+	var researched := 0
+	for id in Content.TRACK_IDS:
+		if Sim.research(game.state, id):
+			researched += 1
+	print("research   %d tracks taken to level 1 %s" % [researched, game.state["tracks"]])
+
+	var gross_before: float = Sim.derive(game.state)["gross"]["food"]
+	var age_before: int = game.state["age"]
+	var advanced := Sim.advance_age(game.state)
+	var after := Sim.derive(game.state)
+	var gross_after: float = after["gross"]["food"]
+
+	print("advance    %s -> %s (%s)" % [
+		Content.AGES[age_before]["name"], Content.AGES[game.state["age"]]["name"], advanced
+	])
+	print("output     food gross %.3f -> %.3f  = x%.2f (expected x%.1f)" % [
+		gross_before, gross_after,
+		gross_after / maxf(gross_before, 0.0001), Sim.AGE_OUTPUT_STEP
+	])
+	print("unlocks    warehouse now buildable: %s" % (
+		Content.building("warehouse")["age"] <= game.state["age"]
+	))
+
+	# Let the scene draw the new state before the screenshot.
+	await _run(1.0)
+	print("")
+	print("hud check  age label %s  at %s  visible=%s" % [
+		JSON.stringify(game._age_label.text),
+		game._age_label.global_position, game._age_label.visible
+	])
+	print("           advance btn %s" % JSON.stringify(game._advance_btn.text))
+	print("           state age=%d food=%.0f  root children=%d" % [
+		game.state["age"], game.state["res"]["food"], root.get_child_count()
+	])
+	# The viewport texture lags a frame or two behind the state, so a capture
+	# taken immediately shows the HUD as it was before the last change.
+	for i in 4:
+		await process_frame
+		await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://play.png")
 	print("wrote play.png")
 	quit()

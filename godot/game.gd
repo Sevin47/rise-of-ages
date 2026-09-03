@@ -28,6 +28,11 @@ var _hud: Control
 var _res_labels := {}
 var _pop_label: Label
 var _hint: Label
+var _age_label: Label
+var _advance_btn: Button
+var _library_panel: PanelContainer
+var _track_rows := {}      ## track id -> {level, cost, button}
+var _build_buttons := {}   ## building id -> Button
 var _building_nodes := {}   ## placement id -> Node2D
 var _citizen_nodes := {}    ## worker id -> Sprite2D
 var _citizen_sheet: Texture2D
@@ -314,17 +319,13 @@ func _build_hud() -> void:
 		col.add_child(l)
 		_res_labels[id] = l
 
-	# Population, top right.
+	# Population sits with the resources rather than in the opposite corner.
+	# Top-centre and top-right collided, because the advance button's label
+	# grows to explain itself and pushed straight into the readout.
+	col.add_child(HSeparator.new())
 	_pop_label = Label.new()
-	# Anchored to the right edge and grown leftwards. Anchoring it to the
-	# corner and letting it run right just pushed the text off screen.
-	_pop_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_pop_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_pop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_pop_label.position = Vector2(-360, 10)
-	_pop_label.custom_minimum_size = Vector2(350, 0)
-	_pop_label.add_theme_font_size_override("font_size", 14)
-	_hud.add_child(_pop_label)
+	_pop_label.add_theme_font_size_override("font_size", 13)
+	col.add_child(_pop_label)
 
 	# Build bar along the bottom.
 	var bar := HBoxContainer.new()
@@ -340,6 +341,7 @@ func _build_hud() -> void:
 		btn.add_theme_font_size_override("font_size", 12)
 		btn.pressed.connect(_set_ghost.bind(b["id"]))
 		bar.add_child(btn)
+		_build_buttons[b["id"]] = btn
 
 	_hint = Label.new()
 	_hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -347,6 +349,128 @@ func _build_hud() -> void:
 	_hint.add_theme_font_size_override("font_size", 12)
 	_hud.add_child(_hint)
 	_say("Pick a building, then click the ground. Drag to pan, wheel to zoom.")
+
+	_build_age_banner()
+	_build_library()
+
+
+## The age, and the button out of it, centred above the map.
+func _build_age_banner() -> void:
+	var box := HBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	box.position = Vector2(-190, 8)
+	box.custom_minimum_size = Vector2(380, 0)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 10)
+	_hud.add_child(box)
+
+	_age_label = Label.new()
+	_age_label.add_theme_font_size_override("font_size", 16)
+	box.add_child(_age_label)
+
+	_advance_btn = Button.new()
+	_advance_btn.text = "Advance the age"
+	_advance_btn.add_theme_font_size_override("font_size", 12)
+	_advance_btn.pressed.connect(_on_advance)
+	box.add_child(_advance_btn)
+
+	var lib_btn := Button.new()
+	lib_btn.text = "Library"
+	lib_btn.add_theme_font_size_override("font_size", 12)
+	lib_btn.pressed.connect(func(): _library_panel.visible = not _library_panel.visible)
+	box.add_child(lib_btn)
+
+
+## Four tracks, one level per age. Leaving an age needs three of the four
+## standing at the level that matches it, which is what stops a player rushing
+## one track and skipping the tree.
+func _build_library() -> void:
+	_library_panel = PanelContainer.new()
+	_library_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_library_panel.position = Vector2(-210, 44)
+	_library_panel.custom_minimum_size = Vector2(420, 0)
+	_library_panel.visible = false
+	_hud.add_child(_library_panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	_library_panel.add_child(col)
+
+	var head := Label.new()
+	head.text = "The Library: three of four tracks must match the age you are leaving."
+	head.add_theme_font_size_override("font_size", 11)
+	col.add_child(head)
+
+	for id in Content.TRACK_IDS:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		col.add_child(row)
+
+		var name_label := Label.new()
+		name_label.custom_minimum_size = Vector2(150, 0)
+		name_label.add_theme_font_size_override("font_size", 12)
+		row.add_child(name_label)
+
+		var cost_label := Label.new()
+		cost_label.custom_minimum_size = Vector2(180, 0)
+		cost_label.add_theme_font_size_override("font_size", 11)
+		row.add_child(cost_label)
+
+		var btn := Button.new()
+		btn.text = "Research"
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.pressed.connect(_on_research.bind(id))
+		row.add_child(btn)
+
+		_track_rows[id] = {"name": name_label, "cost": cost_label, "button": btn}
+
+
+func _on_research(id: String) -> void:
+	if Sim.research(state, id):
+		_say("%s reaches level %d." % [Content.TRACKS[id]["name"], state["tracks"][id]])
+	else:
+		_say("Cannot research %s yet." % Content.TRACKS[id]["name"])
+
+
+## Advancing multiplies every building's output and every store by 3.2. That
+## step is what meets age prices climbing roughly six-fold a rung.
+func _on_advance() -> void:
+	var was: int = state["age"]
+	if Sim.advance_age(state):
+		_say("Your nation enters the %s. Output and storage x%.1f." % [
+			Content.AGES[state["age"]]["name"], Sim.AGE_OUTPUT_STEP
+		])
+	elif not Sim.tracks_ready(state):
+		_say("The library is not ready: %d of 4 tracks at level %d." % [
+			_tracks_at_level(was + 1), was + 1
+		])
+	else:
+		_say("Not enough in store to advance the age.")
+
+
+func _tracks_at_level(level: int) -> int:
+	var n := 0
+	for id in Content.TRACK_IDS:
+		if state["tracks"][id] >= level:
+			n += 1
+	return n
+
+
+## A cost as "400 food, 150 metal", short enough for a button label.
+func _cost_text(cost: Dictionary) -> String:
+	var parts := []
+	for r in cost:
+		parts.append("%s %s" % [_short(cost[r]), r])
+	return ", ".join(parts)
+
+
+## Compact numbers, because by the Industrial Age these run to eight digits.
+func _short(v: float) -> String:
+	if v >= 1e6:
+		return "%.1fM" % (v / 1e6)
+	if v >= 1e3:
+		return "%.1fK" % (v / 1e3)
+	return "%.0f" % v
 
 
 func _say(msg: String) -> void:
@@ -358,11 +482,86 @@ func _update_hud() -> void:
 	var d := Sim.derive(state)
 	for id in Content.RESOURCE_IDS:
 		var net: float = d["net"][id]
-		_res_labels[id].text = "%-10s %8.0f /%-8.0f %+.2f/s" % [
-			Content.RESOURCES[id]["name"], state["res"][id], d["caps"][id], net
+		_res_labels[id].text = "%-10s %8s /%-8s %+.2f/s" % [
+			Content.RESOURCES[id]["name"], _short(state["res"][id]), _short(d["caps"][id]), net
 		]
 		_res_labels[id].modulate = Color(1, 0.7, 0.6) if net < 0.0 else Color(1, 1, 1)
 
-	_pop_label.text = "%d / %d citizens   %d idle   %d walking" % [
+	_pop_label.text = "%d / %d citizens  %d idle  %d walking" % [
 		int(state["citizens"]), int(d["pop_cap"]), int(d["idle"]), units.walking_count()
 	]
+
+	_update_age(d)
+	_update_library(d)
+	_update_build_bar(d)
+
+
+func _update_age(d: Dictionary) -> void:
+	var age: int = state["age"]
+	_age_label.text = "%s   (%d/%d build slots)" % [
+		Content.AGES[age]["name"], int(d["build_used"]), int(d["build_cap"])
+	]
+
+	if age >= Content.MAX_AGE:
+		_advance_btn.text = "Final age"
+		_advance_btn.disabled = true
+		return
+
+	var ready := Sim.tracks_ready(state)
+	var cost := Sim.age_cost(state, d)
+	var afford := Sim.can_afford(state, cost)
+	_advance_btn.disabled = not (ready and afford)
+	if not ready:
+		_advance_btn.text = "Library not ready (%d/%d)" % [
+			_tracks_at_level(age + 1), Content.TRACKS_NEEDED_TO_ADVANCE
+		]
+		_advance_btn.tooltip_text = "Needs %d of 4 tracks at level %d." % [
+			Content.TRACKS_NEEDED_TO_ADVANCE, age + 1
+		]
+	else:
+		_advance_btn.text = "Advance: %s" % _cost_text(cost)
+
+
+func _update_library(d: Dictionary) -> void:
+	if not _library_panel.visible:
+		return
+	for id in Content.TRACK_IDS:
+		var row: Dictionary = _track_rows[id]
+		var level: int = state["tracks"][id]
+		row["name"].text = "%s  level %d" % [Content.TRACKS[id]["name"], level]
+
+		# A track can only ever run one level ahead of nothing: level N needs
+		# age N-1, so the four cannot be rushed apart.
+		if level >= Content.MAX_TRACK_LEVEL:
+			row["cost"].text = "complete"
+			row["button"].disabled = true
+			continue
+		if level > state["age"]:
+			row["cost"].text = "needs the next age"
+			row["button"].disabled = true
+			continue
+
+		var cost := Sim.track_cost(state, id, d)
+		row["cost"].text = _cost_text(cost)
+		row["button"].disabled = not Sim.can_afford(state, cost)
+
+
+## Grey out what cannot be built, and say why in the tooltip rather than
+## leaving a dead button with no explanation.
+func _update_build_bar(d: Dictionary) -> void:
+	for id in _build_buttons:
+		var def := Content.building(id)
+		var btn: Button = _build_buttons[id]
+		if def["age"] > state["age"]:
+			btn.disabled = true
+			btn.tooltip_text = "Unlocks in the %s" % Content.AGES[def["age"]]["name"]
+			continue
+		var cost := Sim.building_cost(state, id, d)
+		var afford := Sim.can_afford(state, cost)
+		var room: bool = def.get("free_of_build_cap", false) or d["build_used"] < d["build_cap"]
+		btn.disabled = not (afford and room)
+		if not room:
+			btn.tooltip_text = "No build slots left. Found another city."
+		else:
+			btn.tooltip_text = "%s
+%s" % [_cost_text(cost), "" if afford else "Not enough in store"]
