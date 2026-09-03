@@ -1,0 +1,25 @@
+Art used by the Godot spike, and what each licence asks of you.
+
+Kenney — CC0 1.0 (public domain, no conditions)
+----------------------------------------------
+  land/     Isometric Tiles Landscape   https://kenney.nl/assets/isometric-tiles-landscape
+  build/    Isometric Tiles Buildings   https://kenney.nl/assets/isometric-tiles-buildings
+  unit/     Medieval RTS                https://kenney.nl/assets/medieval-rts
+
+CC0 asks for nothing. Credit is given here because it is deserved.
+
+2DPIXX — CC-BY 4.0 (ATTRIBUTION REQUIRED)
+-----------------------------------------
+  pixx/     Free 2D Isometric Fantasy Pack
+            Jana Ochse, 2D!PIXX, https://www.2dpixx.de
+            https://store.godotengine.org/asset/twodpixx/test/
+
+This one is not public domain. If any of these sprites ship in a build, that
+credit line has to ship with it, somewhere a player can find it: an About
+screen, a credits panel, or the store page. It is the only obligation the
+licence imposes, and it is easy to forget once the art is just files in a
+folder, which is why it is written down here next to them.
+
+The characters are from this pack because Kenney has no isometric figures at
+all. The catalogue has landscapes, buildings, roads and vehicles, but the
+"Isometric Miniature Library" is a room full of bookcases, not people.

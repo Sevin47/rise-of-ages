@@ -61,10 +61,25 @@ what made the ground tessellate.
   roof, and the stacking offset here is a guess rather than measured.
 - **The buildings are modern.** That pack is a city set. It is a placeholder;
   a medieval isometric set would have to come from elsewhere.
-- **There is no isometric character art in Kenney's catalogue.** The
-  "Isometric Miniature Library" is a room full of bookcases, not figures. The
-  citizens here are the old top-down sprites and read as specks. This is the
-  one asset problem the CC0 catalogue does not solve.
+- **Hills still read as roads.** Kenney's stone plateau has kerbed edges that
+  only show once it is tiled.
+- **The buildings are still Kenney's modern city set**, and they read as
+  open-topped boxes. 2DPIXX's village tileset in `assets/pixx/` is medieval and
+  much better looking, but it is modular walls and roofs, so using it means
+  assembling each building rather than picking a sprite.
+
+### Where the characters came from
+
+Kenney has no isometric figures at all, so the citizens are 2DPIXX's free
+isometric pack: four facings, with idle, walk and attack animations. That fixed
+the problem, at the cost of the project's first licence with a condition
+attached.
+
+**Everything else here is CC0 and asks for nothing. The 2DPIXX sprites are
+CC-BY 4.0 and require attribution in anything that ships them.** See
+`assets/CREDITS.txt`. Worth knowing before that art spreads through the
+codebase: dropping it later is easy now and annoying once the game is built
+around it.
 
 ## Running it
 

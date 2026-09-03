@@ -30,7 +30,7 @@ const TILE_H := 66.0
 const LAND := {
 	WorldMap.WATER: ["res://assets/land/066.png"],   # plain water, no beach corner
 	WorldMap.GRASS: ["res://assets/land/022.png"],   # plain green top
-	WorldMap.FOREST: ["res://assets/land/036.png"],  # green mound, reads as canopy
+	WorldMap.FOREST: ["res://assets/land/022.png"],  # plain grass; trees are drawn on top
 	WorldMap.HILLS: ["res://assets/land/095.png"],   # bare stone plateau
 	WorldMap.DESERT: ["res://assets/land/059.png"],  # sand
 }
@@ -50,11 +50,18 @@ const BUILDING_ART := {
 ## How far a storey lifts the roof above the ground plane.
 const WALL_HEIGHT := 33.0
 
-const UNIT_ART := {
-	"idle": "res://assets/unit/17.png",
-	"walk": "res://assets/unit/04.png",
-	"work": "res://assets/unit/10.png",
-}
+## Citizens come from 2DPIXX's free isometric pack (CC-BY 4.0, Jana Ochse).
+## Kenney has no isometric figures at all, and the old top-down sprites read as
+## specks once the camera is isometric. These are proper isometric characters
+## with four facings, so a citizen can face the way it is walking.
+const CITIZEN_SHEET := "res://assets/pixx/warrior_walk.png"
+const CITIZEN_FRAME := Vector2(128, 160)
+const CITIZEN_COLS := 4   # animation frames
+const CITIZEN_ROWS := 4   # facings
+
+## A tree lifted out of the same pack's village tileset, for woodland.
+const VILLAGE_SHEET := "res://assets/pixx/village.png"
+const TREE_CELL := Vector2i(6, 1)   # column, row in the 7x7 grid of 128px cells
 
 var world: WorldMap
 
@@ -83,6 +90,7 @@ func _init() -> void:
 	root.add_child(root2d)
 
 	_draw_ground(root2d)
+	_draw_trees(root2d)
 	_draw_buildings(root2d, built)
 	_draw_citizens(root2d, built)
 
@@ -162,17 +170,55 @@ func _draw_buildings(parent: Node2D, built: Array[Dictionary]) -> void:
 
 
 func _draw_citizens(parent: Node2D, built: Array[Dictionary]) -> void:
+	var sheet: Texture2D = load(CITIZEN_SHEET)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
 	for p in built:
 		var n := WorldMap.footprint(p["def"])
-		var phase: String = ["work", "idle", "walk"][rng.randi() % 3]
-		for i in 3:
+		for i in 4:
 			var s := Sprite2D.new()
-			s.texture = load(UNIT_ART[phase])
+			s.texture = sheet
+			s.region_enabled = true
+			# One frame out of the sheet: column is the animation step, row is
+			# the facing. Picking both at random gives a crowd that is not all
+			# mid-stride in the same direction.
+			var col := rng.randi() % CITIZEN_COLS
+			var row := rng.randi() % CITIZEN_ROWS
+			s.region_rect = Rect2(
+				col * CITIZEN_FRAME.x, row * CITIZEN_FRAME.y,
+				CITIZEN_FRAME.x, CITIZEN_FRAME.y
+			)
 			s.centered = false
-			var off := Vector2(rng.randf_range(-1.2, 1.2), rng.randf_range(-1.2, 1.2))
+			var off := Vector2(rng.randf_range(-1.4, 1.4), rng.randf_range(-1.4, 1.4))
 			var q := to_screen(p["tx"] + n / 2.0 + off.x, p["ty"] + n / 2.0 + off.y)
-			s.position = Vector2(q.x - 16.0, q.y - 30.0)
-			s.scale = Vector2(0.5, 0.5)
+			# Feet on the ground: the sprite is anchored by its bottom edge.
+			# A citizen has to be small enough that a house still reads as a
+			# house. At the pack's native size they tower over the buildings.
+			var k := 0.24
+			s.scale = Vector2(k, k)
+			s.position = Vector2(
+				q.x - CITIZEN_FRAME.x * k / 2.0,
+				q.y - CITIZEN_FRAME.y * k + TILE_H * 0.3
+			)
+			parent.add_child(s)
+
+
+## Scatter woodland across forest tiles, so a wood reads as trees rather than
+## as a green mound.
+func _draw_trees(parent: Node2D) -> void:
+	var sheet: Texture2D = load(VILLAGE_SHEET)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for ty in WorldMap.MAP_H:
+		for tx in WorldMap.MAP_W:
+			if world.at(tx, ty) != WorldMap.FOREST:
+				continue
+			var s := Sprite2D.new()
+			s.texture = sheet
+			s.region_enabled = true
+			s.region_rect = Rect2(TREE_CELL.x * 128, TREE_CELL.y * 128, 128, 128)
+			s.centered = false
+			var q := to_screen(tx + rng.randf_range(-0.2, 0.2), ty + rng.randf_range(-0.2, 0.2))
+			s.scale = Vector2(0.8, 0.8)
+			s.position = Vector2(q.x - 128 * 0.8 / 2.0, q.y - 128 * 0.8 + TILE_H * 0.5)
 			parent.add_child(s)
