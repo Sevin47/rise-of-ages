@@ -24,6 +24,48 @@ knowledge/s        946867.82         946867.82
 
 Every printed line matches, and so do all 120 buildings across 12 kinds.
 
+## Second spike: isometric
+
+`iso_probe.gd` builds a world with the ported generator, draws it
+isometrically with Kenney's CC0 landscape blocks, drops buildings and citizens
+on it, renders one frame and writes `iso_probe.png`. The result is
+`iso-spike.png` in this folder.
+
+    godot --path godot --script iso_probe.gd
+
+Not `--headless`: that has no renderer and would save a blank image.
+
+### What it proves
+
+Isometric works, and Godot does most of it. The projection is two lines
+(`to_screen`), and depth sorting is a single property: `y_sort_enabled` on the
+parent makes Godot draw children in Y order, which is exactly the painter's
+order isometric needs. No manual depth sort, no z-index juggling.
+
+### The one thing worth knowing
+
+Every tile in the landscape pack shares one base footprint, a 2:1 diamond 132
+by 66, but the images vary from 83 to 131 pixels tall because the block above
+that diamond varies in height. Anchoring every sprite a fixed distance above
+its projected point therefore only works if all the blocks are the same height;
+the taller ones float clear of their neighbours and the ground gaps open up.
+`ground_anchor` derives the offset from each texture's height instead, which is
+what made the ground tessellate.
+
+### Still rough
+
+- **Hills read as roads.** Several tiles in the pack carry a kerb or a road
+  stripe that is invisible on a contact sheet and obvious once tiled across a
+  map. The stone plateau picked here still has kerbed edges.
+- **Building roofs sit wrong.** The buildings pack is modular, a storey plus a
+  roof, and the stacking offset here is a guess rather than measured.
+- **The buildings are modern.** That pack is a city set. It is a placeholder;
+  a medieval isometric set would have to come from elsewhere.
+- **There is no isometric character art in Kenney's catalogue.** The
+  "Isometric Miniature Library" is a room full of bookcases, not figures. The
+  citizens here are the old top-down sprites and read as specks. This is the
+  one asset problem the CC0 catalogue does not solve.
+
 ## Running it
 
 Needs a Godot 4 binary. The project has to be imported once so that
