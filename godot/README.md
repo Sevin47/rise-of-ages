@@ -61,10 +61,31 @@ what made the ground tessellate.
   roof, and the stacking offset here is a guess rather than measured.
 - **The buildings are modern.** That pack is a city set. It is a placeholder;
   a medieval isometric set would have to come from elsewhere.
-- **Hills still read as roads.** Kenney's stone plateau has kerbed edges that
-  only show once it is tiled. This is the last obviously wrong asset.
-- **Roofs overhang more than they should**, because a building is one column of
-  cells rather than walls arranged around its whole footprint.
+- Buildings are still one column of cells rather than walls arranged around a
+  whole footprint, so they read a little narrow for the ground they occupy.
+- The citizens are fantasy warriors, sword and all. Fine at this size, but they
+  are not villagers.
+
+### Terrain: why nothing is painted as a "hills tile"
+
+Every grey tile in Kenney's landscape pack carries a kerb or a road stripe.
+Neither shows on a contact sheet; both are unmistakable once tiled across a
+map, and the first attempt at hills came out looking like a motorway junction.
+
+So high ground is bare earth with rock scattered over it, and woodland is plain
+grass with trees scattered over it. This is the same conclusion the top-down
+build reached: terrain painted as a tile shows its grid however good the tile
+is, because every feature lands on the same lattice. Props at positions that
+ignore tile edges are what break it up, and here they are also what tells one
+terrain from another.
+
+### Roofs
+
+A roof cell is drawn to fill its cell, while the walls beneath it are a corner
+piece that reads narrower, so at equal scale the roof overhangs the building it
+caps. Layers therefore carry their own scale, and roofs use `ROOF_K`. The lift
+stays in the unshrunk scale: shrinking a roof must not also drop it into the
+walls it is sitting on.
 
 ### Assembling the buildings
 

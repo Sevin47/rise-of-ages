@@ -31,7 +31,10 @@ const LAND := {
 	WorldMap.WATER: ["res://assets/land/066.png"],   # plain water, no beach corner
 	WorldMap.GRASS: ["res://assets/land/022.png"],   # plain green top
 	WorldMap.FOREST: ["res://assets/land/022.png"],  # plain grass; trees are drawn on top
-	WorldMap.HILLS: ["res://assets/land/095.png"],   # bare stone plateau
+	# Not one of the pack's grey tiles: every one of those carries a kerb or a
+	# road stripe, invisible on a contact sheet and unmistakable once tiled.
+	# Bare earth, with rock scattered on top, reads as high ground instead.
+	WorldMap.HILLS: ["res://assets/land/073.png"],
 	WorldMap.DESERT: ["res://assets/land/059.png"],  # sand
 }
 
@@ -57,24 +60,28 @@ const C_FLATROOF := Vector2i(4, 6) # red roof over a low wall
 const C_CHIMNEY := Vector2i(2, 6)
 const C_DOOR := Vector2i(5, 3)
 
-## Each building is a stack of [cell, lift] layers, bottom first.
+## Each building is a stack of [cell, lift, scale] layers, bottom first. The
+## scale is there for roofs: a roof cell is drawn to fill its cell, while the
+## walls under it are a corner piece that reads narrower, so at equal scale the
+## roof overhangs the building it is supposed to cap.
+const ROOF_K := 0.82
 const RECIPES := {
 	# Squat huts: a foundation with a roof straight on top.
-	"farm": [[C_STONE, 0.0], [C_GABLE_B, BASE_H]],
-	"camp": [[C_STONE, 0.0], [C_FLATROOF, BASE_H]],
-	"mine": [[C_STONE, 0.0], [C_FLATROOF, BASE_H]],
+	"farm": [[C_STONE, 0.0, 1.0], [C_GABLE_B, BASE_H, ROOF_K]],
+	"camp": [[C_STONE, 0.0, 1.0], [C_FLATROOF, BASE_H, ROOF_K]],
+	"mine": [[C_STONE, 0.0, 1.0], [C_FLATROOF, BASE_H, ROOF_K]],
 	# Walled buildings: foundation, walls, then the roof over them.
-	"market": [[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE, BASE_H + WALL_H]],
-	"library": [[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE_B, BASE_H + WALL_H]],
+	"market": [[C_STONE, 0.0, 1.0], [C_WALL, BASE_H, 1.0], [C_GABLE, BASE_H + WALL_H, ROOF_K]],
+	"library": [[C_STONE, 0.0, 1.0], [C_WALL, BASE_H, 1.0], [C_GABLE_B, BASE_H + WALL_H, ROOF_K]],
 	"temple": [
-		[C_STONE, 0.0], [C_WALL, BASE_H], [C_GABLE, BASE_H + WALL_H],
-		[C_CHIMNEY, BASE_H + WALL_H + 34.0],
+		[C_STONE, 0.0, 1.0], [C_WALL, BASE_H, 1.0],
+		[C_GABLE, BASE_H + WALL_H, ROOF_K], [C_CHIMNEY, BASE_H + WALL_H + 30.0, 0.7],
 	],
 	# The city is the landmark, but two storeys on a foundation made a tower
 	# rather than a keep. One storey, and let the larger footprint carry it.
 	"city": [
-		[C_STONE, 0.0], [C_WALL, BASE_H], [C_DOOR, BASE_H],
-		[C_GABLE, BASE_H + WALL_H],
+		[C_STONE, 0.0, 1.0], [C_WALL, BASE_H, 1.0], [C_DOOR, BASE_H, 1.0],
+		[C_GABLE, BASE_H + WALL_H, ROOF_K],
 	],
 }
 
@@ -90,9 +97,12 @@ const CITIZEN_FRAME := Vector2(128, 160)
 const CITIZEN_COLS := 4   # animation frames
 const CITIZEN_ROWS := 4   # facings
 
-## A tree lifted out of the same pack's village tileset, for woodland.
 const VILLAGE_SHEET := "res://assets/pixx/village.png"
-const TREE_CELL := Vector2i(6, 1)   # column, row in the 7x7 grid of 128px cells
+
+## The forest sheet carries the natural clutter: trees, boulders, scrub.
+const FOREST_SHEET := "res://assets/pixx/forest.png"
+const TREE_CELLS := [Vector2i(2, 0), Vector2i(3, 0)]
+const ROCK_CELLS := [Vector2i(4, 4), Vector2i(3, 1), Vector2i(4, 1)]
 
 var world: WorldMap
 
@@ -121,7 +131,7 @@ func _init() -> void:
 	root.add_child(root2d)
 
 	_draw_ground(root2d)
-	_draw_trees(root2d)
+	_draw_clutter(root2d)
 	_draw_buildings(root2d, built)
 	_draw_citizens(root2d, built)
 
@@ -176,16 +186,20 @@ func _draw_ground(parent: Node2D) -> void:
 
 
 ## Draw one cell of the village sheet with its ground diamond on `at`.
-func _pixx_layer(parent: Node2D, sheet: Texture2D, cell: Vector2i, at: Vector2, lift: float, k: float) -> void:
+func _pixx_layer(parent: Node2D, sheet: Texture2D, cell: Vector2i, at: Vector2,
+		lift: float, k: float, shrink: float = 1.0) -> void:
 	var s := Sprite2D.new()
 	s.texture = sheet
 	s.region_enabled = true
 	s.region_rect = Rect2(cell.x * PIXX_CELL, cell.y * PIXX_CELL, PIXX_CELL, PIXX_CELL)
 	s.centered = false
-	s.scale = Vector2(k, k)
+	var ks := k * shrink
+	s.scale = Vector2(ks, ks)
+	# Lift stays in the full-size scale: shrinking a roof must not also drop it
+	# down into the walls it is sitting on.
 	s.position = Vector2(
-		at.x - (PIXX_CELL / 2.0) * k,
-		at.y - PIXX_GROUND_Y * k - lift * k
+		at.x - (PIXX_CELL / 2.0) * ks,
+		at.y - PIXX_GROUND_Y * ks - lift * k
 	)
 	# Every layer of one building sorts as a single object. Without this the
 	# roof sorts below the walls, because its own Y is higher up the screen.
@@ -211,7 +225,7 @@ func _draw_buildings(parent: Node2D, built: Array[Dictionary]) -> void:
 		parent.add_child(group)
 
 		for layer in RECIPES.get(p["def"], RECIPES["farm"]):
-			_pixx_layer(group, sheet, layer[0], Vector2(mid.x, 0.0), layer[1], k)
+			_pixx_layer(group, sheet, layer[0], Vector2(mid.x, 0.0), layer[1], k, layer[2])
 
 
 func _draw_citizens(parent: Node2D, built: Array[Dictionary]) -> void:
@@ -248,22 +262,46 @@ func _draw_citizens(parent: Node2D, built: Array[Dictionary]) -> void:
 			parent.add_child(s)
 
 
-## Scatter woodland across forest tiles, so a wood reads as trees rather than
-## as a green mound.
-func _draw_trees(parent: Node2D) -> void:
-	var sheet: Texture2D = load(VILLAGE_SHEET)
+## Scatter clutter across the ground: trees on woodland, rock on high ground.
+##
+## Same trick the top-down build ended up using. Terrain painted as a tile shows
+## its grid however good the tile is, because every feature lands on the same
+## lattice. Scattering props at positions that ignore tile edges is what breaks
+## it up, and it is also what tells hills apart from sand once the grey road
+## tiles are off the table.
+func _draw_clutter(parent: Node2D) -> void:
+	var forest_sheet: Texture2D = load(FOREST_SHEET)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
+
 	for ty in WorldMap.MAP_H:
 		for tx in WorldMap.MAP_W:
-			if world.at(tx, ty) != WorldMap.FOREST:
+			var t := world.at(tx, ty)
+			var cells: Array
+			var k := 0.8
+			if t == WorldMap.FOREST:
+				cells = TREE_CELLS
+			elif t == WorldMap.HILLS:
+				cells = ROCK_CELLS
+				k = 0.62
+			else:
 				continue
+
+			# Skip the odd tile so a wood or an outcrop thins at its edges
+			# instead of ending on a hard line.
+			if rng.randf() < 0.18:
+				continue
+
+			var cell: Vector2i = cells[rng.randi() % cells.size()]
 			var s := Sprite2D.new()
-			s.texture = sheet
+			s.texture = forest_sheet
 			s.region_enabled = true
-			s.region_rect = Rect2(TREE_CELL.x * 128, TREE_CELL.y * 128, 128, 128)
+			s.region_rect = Rect2(cell.x * PIXX_CELL, cell.y * PIXX_CELL, PIXX_CELL, PIXX_CELL)
 			s.centered = false
-			var q := to_screen(tx + rng.randf_range(-0.2, 0.2), ty + rng.randf_range(-0.2, 0.2))
-			s.scale = Vector2(0.8, 0.8)
-			s.position = Vector2(q.x - 128 * 0.8 / 2.0, q.y - 128 * 0.8 + TILE_H * 0.5)
+			s.scale = Vector2(k, k)
+			var q := to_screen(tx + rng.randf_range(-0.22, 0.22), ty + rng.randf_range(-0.22, 0.22))
+			s.position = Vector2(
+				q.x - PIXX_CELL * k / 2.0,
+				q.y - PIXX_GROUND_Y * k
+			)
 			parent.add_child(s)
