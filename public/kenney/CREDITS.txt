@@ -1,0 +1,20 @@
+Art in this folder is by Kenney (https://kenney.nl) and is released under
+Creative Commons Zero (CC0 1.0 Universal), which places it in the public domain:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Credit is not required by the licence. It is given here because it is deserved.
+
+Packs used
+----------
+tile/      Medieval RTS          https://kenney.nl/assets/medieval-rts
+structure/ Medieval RTS          https://kenney.nl/assets/medieval-rts
+unit/      Medieval RTS          https://kenney.nl/assets/medieval-rts
+icon/      Board Game Icons      https://kenney.nl/assets/board-game-icons
+
+Files are the unmodified 64x64 "Default size" PNGs from those packs, renamed to
+the short numeric names this project looks them up by. The mapping from these
+files to what they represent in the game lives in src/sprites.ts.
+
+The remaining artwork in this project — the wonder, trade-good and library-track
+icons, and every panel texture — is original work and is not from Kenney. It
+lives in src/art.ts.

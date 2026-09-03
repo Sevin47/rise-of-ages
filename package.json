@@ -1,0 +1,23 @@
+{
+  "name": "rise-of-ages",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "sheet": "tsc --ignoreConfig sheet.ts --module commonjs --target ES2022 --lib ES2022,DOM --skipLibCheck --outDir tmp && node -e \"require('fs').writeFileSync('tmp/package.json',JSON.stringify({type:'commonjs'}))\" && node tmp/sheet.js icons.html",
+    "balance": "tsc --ignoreConfig balance.ts --module commonjs --target ES2022 --lib ES2022,DOM --skipLibCheck --outDir tmp && node -e \"require('fs').writeFileSync('tmp/package.json',JSON.stringify({type:'commonjs'}))\" && node tmp/balance.js"
+  },
+  "description": "An incremental game about carrying one nation from the Ancient world to the Information Age. Gather six resources, staff them with citizens, research four library tracks and advance the ages.",
+  "homepage": "https://sevin47.github.io/rise-of-ages/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sevin47/rise-of-ages.git"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}
