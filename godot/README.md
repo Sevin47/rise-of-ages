@@ -117,6 +117,52 @@ CC-BY 4.0 and require attribution in anything that ships them.** See
 codebase: dropping it later is easy now and annoying once the game is built
 around it.
 
+## Third spike: playable
+
+`main.tscn` is the game. Pick a building from the bar, click the ground, and
+citizens walk out and work it while the economy ticks on what they produce.
+
+    godot --path godot
+
+Drag to pan, wheel to zoom, arrows to scroll. Right-click cancels a placement,
+Shift keeps the palette armed. Clicking a building staffs it; clicking a full
+one empties it.
+
+`verify.gd` drives the whole thing without a person at the keyboard and reports
+what happened, which is how the chain below was checked rather than eyeballed:
+
+    godot --path godot --script verify.gd
+
+    world      1 placements, 3 citizens
+    placement  farm at (34, 20) -> 1 farm(s) standing
+    citizens   10 total, 2 posted (0 walking, 2 working)
+    jobs       {"food":2.0, ...}
+    economy    food 117.1 -> 132.9  (+0.47/s)  citizens 6.5 -> 10.8
+
+That +0.47/s is the number to look at. A farm produces 0.2 standing plus 0.3
+per citizen at work, so two citizens make 0.8 gross, and eleven citizens eat
+0.33. The economy is behaving exactly as it does headless, driven by people who
+had to walk there first.
+
+### What Godot took over
+
+- **Pathfinding.** `AStarGrid2D`, so the hand-rolled A* and its binary heap
+  are gone.
+- **Depth sorting.** `y_sort_enabled` on one node, and the painter's order
+  isometric needs falls out of it.
+- **UI.** Control nodes, so no rebuilding a DOM four times a second and no
+  scroll positions to restore.
+
+The ground layer is deliberately *not* y-sorted: it is always behind
+everything, and sorting three thousand static tiles every frame would cost real
+time and buy nothing.
+
+### Not there yet
+
+No save or load, no library, wonders or trade, no ages beyond the first, and no
+menu. Those are all in the TypeScript build and none of them are hard; this
+spike was about proving the loop, and the loop runs.
+
 ## Running it
 
 Needs a Godot 4 binary. The project has to be imported once so that

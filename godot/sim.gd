@@ -320,6 +320,29 @@ static func build(state: Dictionary, id: String) -> bool:
 	return true
 
 
+## Charge for a building without raising it.
+##
+## The map owns `state["buildings"]`: it is recomputed from the placements every
+## frame, so incrementing it here would be overwritten immediately. This sits
+## alongside `build` rather than replacing it, because `build` still works with
+## no map at all, which is what lets balance.gd probe the economy on its own.
+static func build_pay(state: Dictionary, id: String) -> bool:
+	var def := Content.building(id)
+	if def.is_empty() or def["age"] > state["age"]:
+		return false
+	var d := derive(state)
+	var owned: int = state["buildings"].get(id, 0)
+	if def.get("city_limited", false) and owned >= d["city_cap"]:
+		return false
+	if not def.get("free_of_build_cap", false) and d["build_used"] >= d["build_cap"]:
+		return false
+	var cost := building_cost(state, id, d)
+	if not can_afford(state, cost):
+		return false
+	pay(state, cost)
+	return true
+
+
 static func research(state: Dictionary, id: String) -> bool:
 	var level: int = state["tracks"][id]
 	if level >= Content.MAX_TRACK_LEVEL or level > state["age"]:
