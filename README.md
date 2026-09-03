@@ -11,6 +11,11 @@ build, where to put it, and who to send.
 
 Play: `npm install && npm run dev`
 
+The game opens on a menu rather than dropping you straight onto a map:
+**Continue** (with a summary of the nation waiting for you), **New Nation**,
+**Import a save**, or **About**. A drifting view of a generated world plays
+behind it. You can get back to it any time from the Nation panel.
+
 ## Controls
 
 | | |
@@ -21,6 +26,7 @@ Play: `npm install && npm run dev`
 | Place several | hold `Shift` while placing to keep the palette armed |
 | Cancel / deselect | right-click, or `Esc` |
 | Inspect a building | click it — the panel shows its real output and its crew |
+| Back to the menu | the Nation panel — it saves on the way out |
 
 ## The loop
 
@@ -58,7 +64,10 @@ moves. **A new dynasty** ends the run, banks legacy from how far you got, and
 starts again with a permanent output bonus.
 
 Saves live in `localStorage`, write every ten seconds, and credit up to eight
-hours of time away at half rate. The whole map — terrain, every building, and
+hours of time away at half rate — time spent sitting on the menu counts as being
+away, and is credited when you press Continue. Nothing is ever written while the
+menu is open: if it ran the loop over a throwaway nation, the autosave would
+destroy the very save Continue is offering. The whole map — terrain, every building, and
 every citizen — travels with the save, which runs about 36 KB at full late-game
 scale. Export and import are in the Nation panel.
 
@@ -116,7 +125,7 @@ SVG set at inspection size. It is generated, so it is not checked in.
 | `src/sprites.ts` | which Kenney sprite stands for what, and the image loader |
 | `src/ui.ts` | the overlay panels, as one string |
 | `src/art.ts` | the original SVG icons still used for wonders, trade goods and tracks |
-| `src/main.ts` | game loop, input, autosave |
+| `src/main.ts` | screen state machine (menu / playing), game loop, input, autosave |
 | `balance.ts` | dev-only (`npm run balance`): runs an autoplayer over the real sim and prints when each age falls |
 | `sheet.ts` | dev-only (`npm run sheet`): writes `icons.html`, a contact sheet of the icon set |
 

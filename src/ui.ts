@@ -519,6 +519,7 @@ function nationTab(state: GameState, d: Derived): string {
          <button class="btn ghost small" data-act="export">Export save</button>
          <button class="btn ghost small" data-act="import">Import save</button>
          <button class="btn ghost small" data-act="about">About the art</button>
+         <button class="btn ghost small" data-act="to-menu">Main menu</button>
          <button class="btn ghost small" data-act="wipe">Erase everything</button>
        </div>`,
     )}`;
@@ -526,7 +527,7 @@ function nationTab(state: GameState, d: Derived): string {
 
 // ---------------------------------------------------------------- dialogs
 
-function dialog(ui: UiState, state: GameState): string {
+function dialog(ui: UiState, state: GameState | null): string {
   if (!ui.dialog) return '';
   const d = ui.dialog;
   let title = '';
@@ -543,7 +544,7 @@ function dialog(ui: UiState, state: GameState): string {
       <textarea class="save-blob" id="import-blob" placeholder="Paste here"></textarea>`;
     actions = `<button class="btn ghost" data-act="dismiss">Cancel</button>
       <button class="btn" data-act="do-import">Replace my nation</button>`;
-  } else if (d.kind === 'reset') {
+  } else if (d.kind === 'reset' && state) {
     title = 'Found a new dynasty?';
     body = `<p>Your cities, stores, library and wonders all go. You keep
       <strong>${state.legacy + legacyOnReset(state)} legacy</strong>, worth
@@ -553,10 +554,14 @@ function dialog(ui: UiState, state: GameState): string {
       <button class="btn" data-act="do-reset">Begin again</button>`;
   } else {
     title = 'About the art';
-    body = `<p>Every icon, panel and texture in this game is original work drawn as inline SVG and CSS —
-      no sprites, fonts or textures are copied from Rise of Nations or any other commercial game.
-      The parchment and stone are procedural gradients over an SVG turbulence filter.</p>
-      <p>That keeps the whole thing about ${'≈'}150&nbsp;KB of code with nothing to license and nothing to load.</p>`;
+    body = `<p>The map, buildings, citizens and resource icons are
+      <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney's</a> Medieval RTS and
+      Board Game Icons packs, released under CC0 — public domain, free for any use.
+      Credit is not required by that licence; it is given because it is deserved.</p>
+      <p>The wonder, trade-good and library-track icons, and every panel texture, are original
+      work drawn as inline SVG and CSS. The parchment and stone are procedural gradients over an
+      SVG turbulence filter.</p>
+      <p>The game itself is MIT licensed and open source.</p>`;
   }
 
   return `<div class="scrim" data-act="dismiss-bg"><div class="panel"><div class="sheet">
@@ -617,4 +622,86 @@ export function render(state: GameState, d: Derived, ui: UiState, info: MapInfo)
     </div>
     <div class="hud-bottom">${selectionPanel(state, d, info)}${buildPalette(state, d, info)}</div>
     ${dialog(ui, state)}`;
+}
+
+// ------------------------------------------------------------------- menu
+
+/** How long ago a save was written, in words. */
+function ago(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 90) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * The landing screen. It runs before any nation exists, so it takes the saved
+ * game rather than a live one — and crucially the caller must not have started
+ * the simulation or the autosave yet, or continuing would be overwritten by
+ * the very menu offering it.
+ */
+export function renderMenu(saved: GameState | null, ui: UiState): string {
+  let resume = '';
+  if (saved) {
+    const cities = saved.buildings.city ?? 0;
+    const built = Object.values(saved.buildings).reduce((a, b) => a + b, 0);
+    resume = `<button class="menu-item primary" data-act="menu-continue">
+        <span class="menu-item-name">Continue</span>
+        <span class="menu-item-note">
+          ${AGES[saved.age].name} · ${Math.floor(saved.citizens)} citizens ·
+          ${cities} ${cities === 1 ? 'city' : 'cities'} ·
+          ${built} ${built === 1 ? 'building' : 'buildings'}
+          <br>saved ${ago(Date.now() - saved.savedAt)}${
+            saved.dynasties ? ` · dynasty ${saved.dynasties + 1}` : ''
+          }
+        </span>
+      </button>`;
+  }
+
+  // Starting fresh silently destroys an existing run, so when there is one to
+  // lose the button says so and routes through a confirmation.
+  const newAct = saved ? 'menu-new-confirm' : 'menu-new';
+  const newNote = saved
+    ? 'Abandons the nation above and generates a new map'
+    : 'Generate a map and settle your first city';
+
+  return `<div class="menu-screen">
+    <div class="menu-card">
+      <div class="menu-head">
+        <div class="menu-title">Rise of Ages</div>
+        <div class="menu-sub">
+          Carry one nation from the Ancient world to the Information Age.
+          Settle a map, build where the ground allows it, and send your people to work.
+        </div>
+      </div>
+
+      <div class="menu-items">
+        ${resume}
+        <button class="menu-item ${saved ? '' : 'primary'}" data-act="${newAct}">
+          <span class="menu-item-name">New Nation</span>
+          <span class="menu-item-note">${newNote}</span>
+        </button>
+        <button class="menu-item" data-act="import">
+          <span class="menu-item-name">Import a save</span>
+          <span class="menu-item-note">Paste a save exported from another browser</span>
+        </button>
+        <button class="menu-item" data-act="about">
+          <span class="menu-item-name">About</span>
+          <span class="menu-item-note">Credits and licensing</span>
+        </button>
+      </div>
+
+      <div class="menu-keys">
+        <span><b>Drag</b> or <b>WASD</b> to pan</span>
+        <span><b>Wheel</b> to zoom</span>
+        <span><b>Shift</b> to place several</span>
+        <span><b>Esc</b> to cancel</span>
+      </div>
+    </div>
+    ${dialog(ui, saved)}
+  </div>`;
 }

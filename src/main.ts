@@ -5,6 +5,7 @@ import {
   footprint,
   MAP_H,
   MAP_W,
+  newMap,
   place,
   placementAt,
   placementById,
@@ -46,13 +47,27 @@ import {
   workingAt,
 } from './units';
 import { preloadSprites } from './sprites';
-import { render, type MapInfo, type TabId, type UiState } from './ui';
+import { render, renderMenu, type MapInfo, type TabId, type UiState } from './ui';
 
 const canvas = document.getElementById('map') as HTMLCanvasElement;
 const overlay = document.getElementById('ui')!;
 const renderer = createRenderer(canvas);
 
-let state: GameState = load() ?? newGame();
+/**
+ * The game opens on a menu, so there is no nation until the player asks for
+ * one. `state` stays null for the whole of that screen, and — this is the part
+ * that matters — nothing is ever written to storage while it is null. If the
+ * menu ran the loop with a throwaway game, the autosave would quietly destroy
+ * the very save the Continue button is offering.
+ */
+type Screen = 'menu' | 'playing';
+
+let screen: Screen = 'menu';
+let state: GameState | null = null;
+
+/** The save on disk, read once for the menu and refreshed on returning to it. */
+let savedGame: GameState | null = load();
+
 const ui: UiState = { tab: null, dialog: null };
 
 const view: ViewState = {
@@ -64,39 +79,85 @@ const view: ViewState = {
   hover: null,
 };
 
-// Open on the capital rather than the middle of the coordinate space.
-{
-  const home = state.map.placements.find((p) => p.def === 'city');
-  if (home) {
-    const c = centreOf(home);
-    view.cam.x = c.x;
-    view.cam.y = c.y;
-  }
+// A throwaway world drifting behind the menu. It is never played and never
+// saved; it exists so the landing screen shows the game rather than describing
+// it, and it costs one terrain bake.
+const menuMap = newMap();
+const menuView: ViewState = {
+  cam: { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1.25 },
+  ghost: null,
+  ghostTile: null,
+  ghostOk: false,
+  selected: null,
+  hover: null,
+};
+let menuT = 0;
+
+function driftMenuCamera(dt: number): void {
+  menuT += dt;
+  // Swing only as far as the world actually allows, so the drift can never
+  // wander off the edge and show the void behind it. Deriving the amplitude
+  // from the viewport also keeps it correct when the window is resized.
+  const slackX = Math.max(0, WORLD_W / 2 - canvas.clientWidth / 2 / menuView.cam.zoom) * 0.82;
+  const slackY = Math.max(0, WORLD_H / 2 - canvas.clientHeight / 2 / menuView.cam.zoom) * 0.82;
+  // Two slow, mismatched periods, so the pan never visibly repeats.
+  menuView.cam.x = WORLD_W / 2 + Math.cos(menuT * 0.045) * slackX;
+  menuView.cam.y = WORLD_H / 2 + Math.sin(menuT * 0.031) * slackY;
 }
 
-// Credit time spent away before the first frame is ever drawn.
-const away = offlineCatchUp(state, Date.now() - state.savedAt);
-if (away > 60) {
-  const hours = Math.floor(away / 3600);
-  const mins = Math.round((away % 3600) / 60);
-  log(
-    state,
-    'age',
-    `While you were gone your nation kept working for ${hours ? `${hours}h ` : ''}${mins}m at half pace.`,
-  );
+/** Leave the menu and begin playing the given nation. */
+function startGame(next: GameState): void {
+  state = next;
+  screen = 'playing';
+
+  // Time away is credited on entering the game, not on page load: the player
+  // may have sat on the menu for a while, and that counts as being away too.
+  const away = offlineCatchUp(next, Date.now() - next.savedAt);
+  if (away > 60) {
+    const hours = Math.floor(away / 3600);
+    const mins = Math.round((away % 3600) / 60);
+    log(
+      next,
+      'age',
+      `While you were gone your nation kept working for ${hours ? `${hours}h ` : ''}${mins}m at half pace.`,
+    );
+  }
+
+  // Reconcile the map into the economy before the first painted frame, so it
+  // shows what is on the ground rather than what the save was written with.
+  syncWorkers(next, next.map);
+  syncToState(next, next.map);
+
+  ui.tab = null;
+  ui.dialog = null;
+  resetView(next);
+  touch();
+  paint();
+}
+
+/** Save and hand the screen back to the menu. */
+function toMenu(): void {
+  if (state) save(state);
+  savedGame = load();
+  state = null;
+  screen = 'menu';
+  ui.tab = null;
+  ui.dialog = null;
+  touch();
+  paint();
 }
 
 // ------------------------------------------------------------------ paint
 
-function mapInfo(): MapInfo {
-  const sel = view.selected === null ? null : placementById(state.map, view.selected);
+function mapInfo(g: GameState): MapInfo {
+  const sel = view.selected === null ? null : placementById(g.map, view.selected);
   return {
     selected: sel,
-    postedHere: sel ? postedAt(state.map, sel.id) : 0,
-    workingHere: sel ? workingAt(state.map, sel.id) : 0,
+    postedHere: sel ? postedAt(g.map, sel.id) : 0,
+    workingHere: sel ? workingAt(g.map, sel.id) : 0,
     slotsHere: sel ? slotsOf(sel.def) : 0,
-    idle: idleWorkers(state.map).length,
-    walking: walkingCount(state.map),
+    idle: idleWorkers(g.map).length,
+    walking: walkingCount(g.map),
     ghost: view.ghost,
   };
 }
@@ -104,7 +165,10 @@ function mapInfo(): MapInfo {
 let dirty = true;
 
 function paint(): void {
-  overlay.innerHTML = render(state, derive(state), ui, mapInfo());
+  overlay.innerHTML =
+    screen === 'menu' || !state
+      ? renderMenu(savedGame, ui)
+      : render(state, derive(state), ui, mapInfo(state));
   dirty = false;
 }
 
@@ -139,7 +203,7 @@ function updateGhost(sx: number, sy: number): void {
   const w = renderer.screenToWorld(view.cam, sx, sy);
   const o = ghostOrigin(w.x, w.y, view.ghost);
   view.ghostTile = o;
-  view.ghostOk = placementError(state.map, view.ghost, o.tx, o.ty) === null;
+  view.ghostOk = state !== null && placementError(state.map, view.ghost, o.tx, o.ty) === null;
 }
 
 let dragging = false;
@@ -147,7 +211,7 @@ let dragMoved = false;
 let lastPointer = { x: 0, y: 0 };
 
 canvas.addEventListener('pointerdown', (ev) => {
-  if (ev.button !== 0) return;
+  if (screen !== 'playing' || ev.button !== 0) return;
   dragging = true;
   dragMoved = false;
   lastPointer = { x: ev.clientX, y: ev.clientY };
@@ -155,6 +219,7 @@ canvas.addEventListener('pointerdown', (ev) => {
 });
 
 canvas.addEventListener('pointermove', (ev) => {
+  if (screen !== 'playing') return;
   const rect = canvas.getBoundingClientRect();
   if (dragging) {
     const dx = ev.clientX - lastPointer.x;
@@ -171,7 +236,7 @@ canvas.addEventListener('pointermove', (ev) => {
 });
 
 canvas.addEventListener('pointerup', (ev) => {
-  if (!dragging) return;
+  if (screen !== 'playing' || !dragging) return;
   dragging = false;
   canvas.releasePointerCapture(ev.pointerId);
   if (dragMoved) return;
@@ -181,8 +246,9 @@ canvas.addEventListener('pointerup', (ev) => {
   const tx = Math.floor(w.x / TILE);
   const ty = Math.floor(w.y / TILE);
 
+  if (!state) return;
   if (view.ghost) {
-    tryPlace(view.ghost, w.x, w.y);
+    tryPlace(state, view.ghost, w.x, w.y);
   } else {
     const hit = placementAt(state.map, tx, ty);
     view.selected = hit ? hit.id : null;
@@ -193,6 +259,7 @@ canvas.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('contextmenu', (ev) => {
   ev.preventDefault();
+  if (screen !== 'playing') return;
   if (view.ghost) {
     view.ghost = null;
     view.ghostTile = null;
@@ -206,6 +273,7 @@ canvas.addEventListener(
   'wheel',
   (ev) => {
     ev.preventDefault();
+    if (screen !== 'playing') return;
     const rect = canvas.getBoundingClientRect();
     const sx = ev.clientX - rect.left;
     const sy = ev.clientY - rect.top;
@@ -226,9 +294,9 @@ canvas.addEventListener(
  * Pay for a building and raise it. The order matters: placement is checked
  * first so an illegal spot never costs anything.
  */
-function tryPlace(def: string, wx: number, wy: number): void {
+function tryPlace(g: GameState, def: string, wx: number, wy: number): void {
   const o = ghostOrigin(wx, wy, def);
-  const err = placementError(state.map, def, o.tx, o.ty);
+  const err = placementError(g.map, def, o.tx, o.ty);
   if (err) {
     const why =
       err === 'taken'
@@ -236,20 +304,20 @@ function tryPlace(def: string, wx: number, wy: number): void {
         : err === 'edge'
           ? 'That runs off the edge of the map.'
           : `A ${BUILDING_BY_ID.get(def)?.name ?? def} cannot stand on that ground.`;
-    log(state, 'warn', why);
+    log(g, 'warn', why);
     return;
   }
-  if (!payBuild(state, def)) {
-    log(state, 'warn', 'Not enough in store for that yet.');
+  if (!payBuild(g, def)) {
+    log(g, 'warn', 'Not enough in store for that yet.');
     return;
   }
-  const p = place(state.map, def, o.tx, o.ty);
-  syncToState(state, state.map);
+  const p = place(g.map, def, o.tx, o.ty);
+  syncToState(g, g.map);
   if (p) {
     view.selected = p.id;
     // Staffing a new site immediately is what the player wants nine times in
     // ten, and they can recall from the panel if not.
-    fill(state.map, p);
+    fill(g.map, p);
   }
   // Shift keeps the palette armed for a run of the same building.
   if (!heldShift) view.ghost = null;
@@ -260,8 +328,8 @@ let heldShift = false;
 // ------------------------------------------------------------ overlay input
 
 /** Post or recall citizens on a whole resource line, nearest job first. */
-function shiftLine(res: ResourceId, delta: number): void {
-  const map = state.map;
+function shiftLine(g: GameState, res: ResourceId, delta: number): void {
+  const map = g.map;
   const sites = map.placements.filter((p) => BUILDING_BY_ID.get(p.def)?.produces?.res === res);
   if (delta > 0) {
     for (let n = 0; n < delta; n++) {
@@ -293,14 +361,76 @@ function shiftLine(res: ResourceId, delta: number): void {
   }
 }
 
+/**
+ * Menu clicks. Kept separate from the in-game handler because almost nothing
+ * is shared: there is no nation to act on yet, and the actions that exist are
+ * about deciding which one to load.
+ */
+function menuClick(act: string, target: HTMLElement, ev: MouseEvent): void {
+  switch (act) {
+    case 'menu-continue':
+      if (savedGame) startGame(savedGame);
+      return;
+    case 'menu-new':
+      startGame(newGame());
+      return;
+    case 'menu-new-confirm':
+      // Starting fresh over an existing run destroys it, and the save is the
+      // only copy, so this asks first.
+      if (confirm('Start a new nation? The saved nation on this browser is replaced, and there is no undo.')) {
+        startGame(newGame());
+      }
+      return;
+    case 'import':
+      ui.dialog = { kind: 'import' };
+      break;
+    case 'about':
+      ui.dialog = { kind: 'about' };
+      break;
+    case 'do-import': {
+      const box = document.getElementById('import-blob') as HTMLTextAreaElement | null;
+      const next = box ? importSave(box.value) : null;
+      if (next) {
+        startGame(next);
+        return;
+      }
+      if (box) {
+        box.value = '';
+        box.placeholder = "That did not read as a save. Paste the whole block, including any '=' at the end.";
+      }
+      break;
+    }
+    case 'dismiss':
+      ui.dialog = null;
+      break;
+    case 'dismiss-bg':
+      if (target === ev.target) ui.dialog = null;
+      break;
+    default:
+      return;
+  }
+  touch();
+  paint();
+}
+
 overlay.addEventListener('click', (ev) => {
   const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]');
   if (!target) return;
   const act = target.dataset.act!;
   const id = target.dataset.id ?? '';
-  const sel = view.selected === null ? null : placementById(state.map, view.selected);
+
+  if (screen === 'menu' || !state) {
+    menuClick(act, target, ev);
+    return;
+  }
+
+  const g = state;
+  const sel = view.selected === null ? null : placementById(g.map, view.selected);
 
   switch (act) {
+    case 'to-menu':
+      toMenu();
+      return;
     case 'tab':
       // Clicking the open tab closes the drawer and gives the map the screen.
       ui.tab = ui.tab === (id as TabId) ? null : (id as TabId);
@@ -315,49 +445,49 @@ overlay.addEventListener('click', (ev) => {
       break;
     case 'post-here':
       if (sel) {
-        const free = idleWorkers(state.map, centreOf(sel));
-        if (free.length) post(state.map, free[0], sel);
+        const free = idleWorkers(g.map, centreOf(sel));
+        if (free.length) post(g.map, free[0], sel);
       }
       break;
     case 'fill-here':
-      if (sel) fill(state.map, sel);
+      if (sel) fill(g.map, sel);
       break;
     case 'empty-here':
-      if (sel) emptyBuilding(state.map, sel.id);
+      if (sel) emptyBuilding(g.map, sel.id);
       break;
     case 'raze': {
       if (!sel) break;
       const def = BUILDING_BY_ID.get(sel.def);
-      if (def?.cityLimited && (state.buildings.city ?? 0) <= 1) break;
-      refundBuild(state, sel.def);
-      removePlacement(state.map, sel.id);
+      if (def?.cityLimited && (g.buildings.city ?? 0) <= 1) break;
+      refundBuild(g, sel.def);
+      removePlacement(g.map, sel.id);
       view.selected = null;
-      syncToState(state, state.map);
+      syncToState(g, g.map);
       break;
     }
     case 'job':
-      shiftLine(id as ResourceId, Number(target.dataset.d ?? 0));
+      shiftLine(g, id as ResourceId, Number(target.dataset.d ?? 0));
       break;
     case 'auto':
-      autoPost(state.map);
+      autoPost(g.map);
       break;
     case 'recall':
-      recallAll(state.map);
+      recallAll(g.map);
       break;
     case 'research':
-      research(state, id as TrackId);
+      research(g, id as TrackId);
       break;
     case 'wonder':
-      buildWonder(state, id);
+      buildWonder(g, id);
       break;
     case 'route':
-      toggleRoute(state, id);
+      toggleRoute(g, id);
       break;
     case 'advance':
-      advanceAge(state);
+      advanceAge(g);
       break;
     case 'export':
-      ui.dialog = { kind: 'export', text: exportSave(state) };
+      ui.dialog = { kind: 'export', text: exportSave(g) };
       break;
     case 'import':
       ui.dialog = { kind: 'import' };
@@ -369,11 +499,12 @@ overlay.addEventListener('click', (ev) => {
       ui.dialog = { kind: 'reset' };
       break;
     case 'do-reset': {
-      const earned = state.legacy + legacyOnReset(state);
-      const dynasties = state.dynasties + 1;
-      state = newGame(earned, dynasties);
-      log(state, 'age', `Dynasty ${dynasties} begins with ${earned} legacy behind it.`);
-      resetView();
+      const earned = g.legacy + legacyOnReset(g);
+      const dynasties = g.dynasties + 1;
+      const fresh = newGame(earned, dynasties);
+      log(fresh, 'age', `Dynasty ${dynasties} begins with ${earned} legacy behind it.`);
+      state = fresh;
+      resetView(fresh);
       ui.dialog = null;
       break;
     }
@@ -382,7 +513,7 @@ overlay.addEventListener('click', (ev) => {
       const next = box ? importSave(box.value) : null;
       if (next) {
         state = next;
-        resetView();
+        resetView(next);
         ui.dialog = null;
       } else if (box) {
         box.value = '';
@@ -393,8 +524,10 @@ overlay.addEventListener('click', (ev) => {
     case 'wipe':
       if (confirm('Erase this nation and every banked legacy point? There is no undo.')) {
         wipe();
-        state = newGame();
-        resetView();
+        savedGame = null;
+        state = null;
+        screen = 'menu';
+        ui.tab = null;
         ui.dialog = null;
       }
       break;
@@ -412,11 +545,11 @@ overlay.addEventListener('click', (ev) => {
   paint();
 });
 
-function resetView(): void {
+function resetView(g: GameState): void {
   view.selected = null;
   view.ghost = null;
   view.ghostTile = null;
-  const home = state.map.placements.find((p) => p.def === 'city');
+  const home = g.map.placements.find((p) => p.def === 'city');
   const c = home ? centreOf(home) : { x: WORLD_W / 2, y: WORLD_H / 2 };
   view.cam.x = c.x;
   view.cam.y = c.y;
@@ -473,16 +606,27 @@ function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.5);
   last = now;
 
+  const g = state;
+  if (screen !== 'playing' || !g) {
+    // Menu: draw the drifting backdrop and nothing else. No simulation runs
+    // and, above all, no save is written.
+    driftMenuCamera(dt);
+    renderer.draw(menuMap, menuView);
+    if (dirty) paint();
+    requestAnimationFrame(frame);
+    return;
+  }
+
   panFromKeys(dt);
 
   // Order matters: the map decides what exists and who is working, then the
   // economy runs on those numbers.
-  syncWorkers(state, state.map);
-  updateWorkers(state.map, dt);
-  syncToState(state, state.map);
-  tick(state, dt);
+  syncWorkers(g, g.map);
+  updateWorkers(g.map, dt);
+  syncToState(g, g.map);
+  tick(g, dt);
 
-  renderer.draw(state.map, view);
+  renderer.draw(g.map, view);
 
   sinceOverlay += dt;
   sinceSave += dt;
@@ -496,24 +640,21 @@ function frame(now: number): void {
 
   if (sinceSave >= 10) {
     sinceSave = 0;
-    save(state);
+    save(g);
   }
 
   requestAnimationFrame(frame);
 }
 
-window.addEventListener('beforeunload', () => save(state));
+// Both of these are guarded: saving from the menu would write a nation that
+// does not exist over the one that does.
+window.addEventListener('beforeunload', () => {
+  if (state) save(state);
+});
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) save(state);
+  if (document.hidden && state) save(state);
 });
 
 preloadSprites();
-
-// Reconcile the map into the economy once before the first paint, so the
-// opening frame shows what is actually on the ground rather than the numbers
-// the save happened to be written with.
-syncWorkers(state, state.map);
-syncToState(state, state.map);
-
 paint();
 requestAnimationFrame(frame);
