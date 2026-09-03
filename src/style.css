@@ -152,12 +152,15 @@ body::before {
 
 .ledger {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
+  /* minmax(0, 1fr), not 1fr: a bare `1fr` refuses to shrink below the content's
+     minimum width, so the strip overflowed its container and shoved the age
+     badge onto a row of its own instead of compressing. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   /* Not `stretch`: that made the resource strip match the height of the taller
      age badge beside it, leaving a wide empty band under the chips. */
   align-items: start;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 .ledger .sheet {
@@ -170,10 +173,10 @@ body::before {
 .res {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 150px;
-  min-width: 140px;
-  padding: 6px 10px;
+  gap: 7px;
+  flex: 1 1 128px;
+  min-width: 118px;
+  padding: 5px 9px;
   border-radius: 4px;
   border: 1px solid rgba(90, 68, 30, 0.35);
   background: linear-gradient(180deg, rgba(255, 250, 233, 0.72), rgba(214, 191, 145, 0.45));
@@ -238,9 +241,11 @@ body::before {
 .age-badge {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 16px;
-  min-width: 330px;
+  gap: 12px;
+  padding: 9px 14px;
+  /* Allowed to shrink; the blurb is the first thing dropped when it must. */
+  min-width: 0;
+  max-width: 340px;
 }
 
 .age-shield {
@@ -372,12 +377,54 @@ body::before {
   color: var(--ink-soft);
 }
 
+/*
+ * Two rows, not one. The single-row version put the icon, the name, the rate,
+ * the posts and a five-button stepper on one line; in a 200-pixel side panel
+ * the text wrapped to three lines and the stepper was pushed out of sight
+ * behind a horizontal scrollbar. The stepper now gets a line of its own.
+ */
 .job {
   display: grid;
-  grid-template-columns: 26px 1fr auto;
+  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-areas:
+    'art text'
+    'stepper stepper';
   align-items: center;
-  gap: 8px;
-  padding: 5px 0;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(43, 33, 24, 0.14);
+}
+
+.job:last-of-type {
+  border-bottom: none;
+}
+
+.job-art {
+  grid-area: art;
+}
+
+.job > div:not([class]),
+.job-text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.job .stepper {
+  grid-area: stepper;
+  justify-content: space-between;
+}
+
+/* Buttons share the width evenly instead of overflowing the panel. */
+.job .stepper .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.job .count {
+  flex: 0 0 34px;
+  text-align: center;
 }
 
 .job + .job {
@@ -708,17 +755,22 @@ textarea.save-blob {
 
 /* --------------------------------------------------------- narrow screens */
 
-@media (max-width: 940px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+/*
+ * Left over from the pre-map layout, where the ledger sat above a two-column
+ * document and `.body` still existed. It collapsed the ledger to one column at
+ * 940px, which on the map shell stacked the age badge onto a row of its own and
+ * left a wide empty band across the top. The strip compresses properly on its
+ * own now, so this only applies where there is genuinely no room for two.
+ */
+@media (max-width: 700px) {
   .ledger {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .age-badge {
-    min-width: 0;
+  /* Stacked, the badge should hug its content rather than stretch to a full
+     empty row. */
+  .ledger > .panel:last-child {
+    justify-self: start;
   }
 }
 
@@ -1005,7 +1057,19 @@ body::before {
 }
 
 /* On a narrow window the side panels would swallow the map, so they fold. */
-@media (max-width: 900px) {
+@media (max-width: 1050px) {
+  #ui {
+    grid-template-columns: minmax(190px, 240px) 1fr minmax(0, auto);
+  }
+
+  .hud-left .panel-body {
+    max-height: 26vh;
+  }
+}
+
+/* Only when there is genuinely no room alongside the map do the side panels
+   go; everything they show is reachable from the drawers. */
+@media (max-width: 760px) {
   #ui {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -1272,4 +1336,37 @@ img.icon.inked {
 
 .toggle-row.on .toggle-state {
   color: var(--green);
+}
+
+/* ------------------------------------------------- ledger, narrow windows */
+
+/* Below this the age blurb is the least useful thing on screen: the age name
+   and the advance button carry the meaning on their own. */
+@media (max-width: 1150px) {
+  .age-blurb {
+    display: none;
+  }
+
+  .age-badge {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 950px) {
+  .res-name {
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+
+  .res {
+    flex: 1 1 104px;
+    min-width: 96px;
+    gap: 5px;
+  }
+
+  .ledger .chip-art {
+    width: 22px;
+    height: 22px;
+  }
 }

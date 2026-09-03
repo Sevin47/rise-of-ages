@@ -108,19 +108,80 @@ function bakeTerrain(map: GameMap): HTMLCanvasElement {
     }
   }
 
+  dissolveBoundaries(gg, map);
+
   const out = document.createElement('canvas');
   out.width = WORLD_W;
   out.height = WORLD_H;
   const g = out.getContext('2d')!;
 
-  // Soften the ground. `filter` is unsupported on some older browsers, where
-  // this silently does nothing and the map simply looks as it did before.
-  g.filter = 'blur(2.5px)';
+  // Soften what is left. `filter` is unsupported on some older browsers, where
+  // this silently does nothing and the map simply looks a little harder.
+  g.filter = 'blur(3px)';
   g.drawImage(ground, 0, 0);
   g.filter = 'none';
 
   scatterDecor(g, map);
   return out;
+}
+
+const NEIGHBOURS: [number, number][] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+/**
+ * Break up the straight edges between one terrain and another.
+ *
+ * Blurring alone was not enough, and it is worth being precise about why: a
+ * blur makes a straight line fuzzy, but it leaves it straight. The regions
+ * themselves were still tile-aligned rectangles, so sand met rock in a clean
+ * horizontal run with a ninety-degree corner, and that is exactly what reads as
+ * "blocky" however soft the pixels are.
+ *
+ * So the boundary is dissolved before it is blurred: where two terrains meet,
+ * each spills a few irregular lobes across the shared edge into the other. The
+ * two sides interlock, the corner disappears, and the eye stops finding the
+ * grid. Depth is capped below half a tile so a tile still reads as its own
+ * terrain — placement is decided per tile, and the picture must not lie about
+ * which tile is which.
+ */
+function dissolveBoundaries(g: CanvasRenderingContext2D, map: GameMap): void {
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      const here = TERRAIN_ORDER[map.terrain[ty * MAP_W + tx]];
+
+      for (const [dx, dy] of NEIGHBOURS) {
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+        if (TERRAIN_ORDER[map.terrain[ny * MAP_W + nx]] === here) continue;
+
+        // Seeded per directed edge, so the bake is identical every time.
+        const rand = tileRandom(tx * 31 + dx * 7, ty * 17 + dy * 11);
+        const lobes = 2 + Math.floor(rand() * 3);
+        g.fillStyle = GROUND[here];
+
+        for (let i = 0; i < lobes; i++) {
+          const along = rand();
+          const depth = (0.05 + rand() * 0.4) * TILE;
+          const r = TILE * (0.16 + rand() * 0.22);
+
+          // Walk out from the shared edge into the neighbouring tile.
+          const edgeX = (tx + (dx === 1 ? 1 : 0)) * TILE;
+          const edgeY = (ty + (dy === 1 ? 1 : 0)) * TILE;
+          const cx = dx !== 0 ? edgeX + dx * depth : (tx + along) * TILE;
+          const cy = dy !== 0 ? edgeY + dy * depth : (ty + along) * TILE;
+
+          g.beginPath();
+          g.arc(cx, cy, r, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    }
+  }
 }
 
 function scatterDecor(g: CanvasRenderingContext2D, map: GameMap): void {

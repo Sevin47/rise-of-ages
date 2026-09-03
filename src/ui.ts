@@ -211,9 +211,9 @@ function people(state: GameState, d: Derived, info: MapInfo): string {
       const perHead = d.gross[r.id];
       return `<div class="job">
         <div class="job-art">${resIcon(r.id)}</div>
-        <div>
+        <div class="job-text">
           <div class="job-name">${r.name}</div>
-          <div class="job-meta">${fmt(perHead)}/s · ${posted}/${d.slots[r.id]} posts filled</div>
+          <div class="job-meta">${fmt(perHead)}/s · ${posted}/${d.slots[r.id]} posted</div>
         </div>
         <div class="stepper">
           <button class="btn small" data-act="job" data-id="${r.id}" data-d="-5" ${posted <= 0 ? 'disabled' : ''}>«</button>
