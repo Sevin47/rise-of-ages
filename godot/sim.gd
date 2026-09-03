@@ -255,6 +255,24 @@ static func clamp_jobs(state: Dictionary, d: Dictionary) -> void:
 		budget -= state["jobs"][id]
 
 
+## Credit time spent away: eight hours at most, at half rate, in one-minute
+## steps. Stepping rather than one huge tick matters, because the economy is not
+## linear in dt: caps clamp, stores run dry and citizens starve, and a single
+## eight-hour tick would skip straight past all of it.
+##
+## Returns the seconds credited, so the caller can say what happened.
+static func offline_catch_up(state: Dictionary, elapsed_ms: float) -> float:
+	var seconds: float = minf(elapsed_ms / 1000.0, 8.0 * 3600.0)
+	if seconds < 30.0:
+		return 0.0
+	var remaining := seconds * 0.5
+	while remaining > 0.0:
+		var step: float = minf(60.0, remaining)
+		tick(state, step)
+		remaining -= step
+	return seconds
+
+
 # ------------------------------------------------------------------- costs
 
 static func building_cost(state: Dictionary, id: String, d: Dictionary) -> Dictionary:

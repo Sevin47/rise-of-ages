@@ -178,6 +178,19 @@ func place(def: String, tx: int, ty: int) -> int:
 	return id
 
 
+## Placement ids have to survive a save, because citizens refer to buildings by
+## id: restore the counter too low and the next building reuses an id someone is
+## already posted to.
+func next_placement() -> int:
+	return _next_placement
+
+
+func set_next_placement(v: int) -> void:
+	_next_placement = maxi(v, 1)
+	for p in placements:
+		_next_placement = maxi(_next_placement, p["id"] + 1)
+
+
 ## First legal spot for a building, searched outward from the clearing. Used by
 ## the spike to populate a world without a player.
 func find_spot(def: String) -> Vector2i:

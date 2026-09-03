@@ -179,10 +179,37 @@ The gate refuses first, then the multiplier lands exactly on 3.2, and a
 building gated to the new age becomes available. The build bar greys out what
 is locked or unaffordable and says why in the tooltip.
 
+### Saving
+
+The session persists. It autosaves every ten seconds and on closing the window,
+loads on start, and credits time away at half rate for up to eight hours.
+
+Three things have to survive: the economy, the world and the people. The
+economy is already a plain Dictionary. The world is a seed *plus its terrain*,
+and the terrain is stored rather than re-derived, because generation edits it
+afterwards to guarantee a landing site with woodland and hills in reach.
+Regenerating from the seed alone would quietly move the ground under buildings
+that were already standing on it. The people are positions and postings;
+phase, path and target are rebuilt, so anyone posted comes back already at work
+and anyone mid-journey starts the journey again.
+
+`verify_save.gd` round-trips a session and compares the two sides field by
+field, because a save that loads without error is not a save that works. The
+failure worth catching is the quiet one, where a nation comes back subtly
+different. It checks the age, stores, tracks, placements, the next placement id,
+a terrain checksum, worker count, postings and positions, and then that
+`derive` agrees on both sides rather than only the stored numbers matching.
+
+    godot --path godot --script verify_save.gd
+
+Time away is stepped a minute at a time rather than applied as one huge tick,
+because the economy is not linear in dt: caps clamp, stores run dry and
+citizens starve, and one eight-hour tick would skip straight past all of it.
+
 ### Not there yet
 
-No save or load, no wonders or trade routes, and no menu. All exist in the
-TypeScript build and none are hard.
+No wonders, no trade routes, no menu, and no way to start a second nation
+without deleting the save. All exist in the TypeScript build.
 
 ## Running it
 

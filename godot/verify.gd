@@ -9,6 +9,10 @@ var game: Node2D
 
 
 func _init() -> void:
+	# Start from nothing. The scene loads any save it finds, so without this the
+	# run inherits whatever the last one left behind and stops being a test of a
+	# fresh nation.
+	SaveGame.erase()
 	game = load("res://main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame

@@ -226,6 +226,37 @@ func sync_workers(state: Dictionary) -> void:
 			_next_id += 1
 
 
+## Rebuild the population from a save.
+##
+## Phase, path and target are deliberately not stored. Anyone who was posted is
+## restored already at work, which is where they would have been by the time you
+## came back, and anyone mid-journey simply starts the journey again.
+func restore(people: Array) -> void:
+	workers.clear()
+	_next_id = 1
+	var live := {}
+	for p in world.placements:
+		live[p["id"]] = true
+
+	for saved in people:
+		var post: int = saved.get("post", 0)
+		if not live.has(post):
+			post = 0
+		workers.append({
+			"id": _next_id,
+			"pos": saved["pos"],
+			"post": post,
+			"phase": "idle" if post == 0 else "work",
+			"path": PackedVector2Array(),
+			"tgt": Vector2.ZERO,
+			"has_tgt": false,
+			"wait": randf() * 2.0,
+			"facing": randi() % 4,
+			"anim": randf() * 4.0,
+		})
+		_next_id += 1
+
+
 func update(delta: float) -> void:
 	var cities: Array[Vector2] = []
 	for p in world.placements:

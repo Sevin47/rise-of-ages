@@ -10,6 +10,7 @@ extends Node2D
 
 const START_ZOOM := 0.62
 const PAN_SPEED := 900.0
+const AUTOSAVE_EVERY := 10.0
 
 var world: WorldMap
 var units: Units
@@ -37,13 +38,26 @@ var _building_nodes := {}   ## placement id -> Node2D
 var _citizen_nodes := {}    ## worker id -> Sprite2D
 var _citizen_sheet: Texture2D
 var _dragging := false
+var _since_save := 0.0
 
 
 func _ready() -> void:
 	randomize()
-	world = WorldMap.new()
-	state = Sim.new_game()
-	units = Units.new(world)
+	# Godot does not send a close request unless asked, and without it a
+	# window closed with the mouse would lose everything since the last
+	# autosave.
+	get_tree().set_auto_accept_quit(false)
+
+	var saved := SaveGame.read()
+	var restored := not saved.is_empty()
+	if restored:
+		world = saved["world"]
+		state = saved["state"]
+		units = Units.new(world)
+	else:
+		world = WorldMap.new()
+		state = Sim.new_game()
+		units = Units.new(world)
 	_citizen_sheet = load(IsoArt.CITIZEN_SHEET)
 
 	_ground = Node2D.new()
@@ -57,10 +71,18 @@ func _ready() -> void:
 	_paint_ground()
 	_paint_clutter()
 
-	# The opening city, in the middle of the clearing the generator guarantees.
-	var c := Vector2i(WorldMap.MAP_W / 2 - 1, WorldMap.MAP_H / 2 - 1)
-	if world.place("city", c.x, c.y) != 0:
-		_on_placed(world.placements[-1])
+	if restored:
+		# The world came back with its buildings already in it, so they only
+		# need drawing.
+		for p in world.placements:
+			_on_placed(p)
+		units.restore(saved["people"])
+	else:
+		# The opening city, in the middle of the clearing the generator
+		# guarantees.
+		var c := Vector2i(WorldMap.MAP_W / 2 - 1, WorldMap.MAP_H / 2 - 1)
+		if world.place("city", c.x, c.y) != 0:
+			_on_placed(world.placements[-1])
 
 	_camera = Camera2D.new()
 	_camera.position = Iso.to_screen(WorldMap.MAP_W / 2.0, WorldMap.MAP_H / 2.0)
@@ -71,6 +93,17 @@ func _ready() -> void:
 	_build_hud()
 	units.sync_workers(state)
 	units.sync_to_state(state)
+
+	if restored:
+		var away := Sim.offline_catch_up(
+			state, (Time.get_unix_time_from_system() - saved["saved_at"]) * 1000.0
+		)
+		if away > 60.0:
+			_say("Welcome back. Your nation worked for %s at half pace." % _duration(away))
+		else:
+			_say("Nation restored. %d citizens, %s." % [
+				int(state["citizens"]), Content.AGES[state["age"]]["name"]
+			])
 
 
 # ------------------------------------------------------------------ loop
@@ -87,6 +120,24 @@ func _process(delta: float) -> void:
 
 	_sync_citizen_nodes()
 	_update_hud()
+
+	_since_save += delta
+	if _since_save >= AUTOSAVE_EVERY:
+		_since_save = 0.0
+		SaveGame.write(state, world, units)
+
+
+## Closing the window is the commonest way to stop playing, so it saves.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		SaveGame.write(state, world, units)
+		get_tree().quit()
+
+
+func _duration(seconds: float) -> String:
+	var h := int(seconds / 3600.0)
+	var m := int(fmod(seconds, 3600.0) / 60.0)
+	return ("%dh %02dm" % [h, m]) if h > 0 else ("%dm" % m)
 
 
 func _pan_from_keys(delta: float) -> void:
