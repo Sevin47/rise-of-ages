@@ -159,3 +159,11 @@ before retuning anything:
   hills within reach of it. Without that, a bad terrain roll could leave the
   opening Camp or Mine with nowhere legal to stand, and there is no way to
   recover from that.
+
+## Licence
+
+The code is [MIT](LICENSE) — use it, change it, ship it, commercially or not.
+
+The sprites under `public/kenney/` are Kenney's and are CC0, which is public
+domain rather than MIT; they carry no conditions at all. Every other piece of
+artwork here is original and falls under the MIT licence with the rest.
