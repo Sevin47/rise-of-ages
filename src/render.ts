@@ -21,7 +21,7 @@ import {
   type GameMap,
   type Terrain,
 } from './map';
-import { BUILDING_SPRITES, sprite, spritesReady, TERRAIN_TILES, UNIT_SPRITES } from './sprites';
+import { BUILDING_SPRITES, DECOR, sprite, spritesReady, TERRAIN_TILES, UNIT_SPRITES } from './sprites';
 import { postedAt } from './units';
 
 export interface Camera {
@@ -59,11 +59,37 @@ function hash(x: number, y: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/** A seeded stream of numbers for one tile, so its scatter never changes. */
+function tileRandom(tx: number, ty: number): () => number {
+  let a = (tx * 73856093) ^ (ty * 19349663);
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Bake the world.
+ *
+ * Three passes, and the order is the whole trick:
+ *
+ *  1. Ground tiles, which on their own are 32-pixel squares with hard edges —
+ *     the stair-stepped coastlines and rectangular hills that made the map look
+ *     blocky.
+ *  2. A blur over just that ground layer, which softens every one of those
+ *     edges at once and turns the stair-steps into shorelines.
+ *  3. Decor — trees, rocks, bushes — drawn crisp on top at positions that pay
+ *     no attention to tile boundaries, and are allowed to overhang them. This
+ *     is what actually breaks up the lattice: the eye follows the scatter and
+ *     stops seeing the grid underneath.
+ */
 function bakeTerrain(map: GameMap): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = WORLD_W;
-  c.height = WORLD_H;
-  const g = c.getContext('2d')!;
+  const ground = document.createElement('canvas');
+  ground.width = WORLD_W;
+  ground.height = WORLD_H;
+  const gg = ground.getContext('2d')!;
 
   for (let ty = 0; ty < MAP_H; ty++) {
     for (let tx = 0; tx < MAP_W; tx++) {
@@ -71,17 +97,60 @@ function bakeTerrain(map: GameMap): HTMLCanvasElement {
       const x = tx * TILE;
       const y = ty * TILE;
 
-      // Flat colour first: it is the fallback if the sprite has not loaded,
-      // and it stops seams showing between scaled tiles.
-      g.fillStyle = GROUND[t];
-      g.fillRect(x, y, TILE, TILE);
+      gg.fillStyle = GROUND[t];
+      gg.fillRect(x, y, TILE, TILE);
 
       const variants = TERRAIN_TILES[t];
       const img = sprite(variants[Math.floor(hash(tx, ty) * variants.length) % variants.length]);
-      if (img) g.drawImage(img, x, y, TILE, TILE);
+      // Bleed each tile a pixel past its edge; with the blur that follows it
+      // stops a faint seam showing along every boundary.
+      if (img) gg.drawImage(img, x - 1, y - 1, TILE + 2, TILE + 2);
     }
   }
-  return c;
+
+  const out = document.createElement('canvas');
+  out.width = WORLD_W;
+  out.height = WORLD_H;
+  const g = out.getContext('2d')!;
+
+  // Soften the ground. `filter` is unsupported on some older browsers, where
+  // this silently does nothing and the map simply looks as it did before.
+  g.filter = 'blur(2.5px)';
+  g.drawImage(ground, 0, 0);
+  g.filter = 'none';
+
+  scatterDecor(g, map);
+  return out;
+}
+
+function scatterDecor(g: CanvasRenderingContext2D, map: GameMap): void {
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      const t = TERRAIN_ORDER[map.terrain[ty * MAP_W + tx]];
+      const decor = DECOR[t];
+      if (!decor) continue;
+
+      const rand = tileRandom(tx, ty);
+      const count = decor.min + Math.floor(rand() * (decor.max - decor.min + 1));
+      for (let i = 0; i < count; i++) {
+        const name = decor.sprites[Math.floor(rand() * decor.sprites.length)];
+        const img = sprite(name);
+        const size = TILE * (decor.scale[0] + rand() * (decor.scale[1] - decor.scale[0]));
+        // Deliberately allowed past the tile edge — that overhang is what
+        // stops the scatter from re-drawing the grid it is meant to hide.
+        const x = (tx + rand()) * TILE - size / 2;
+        const y = (ty + rand()) * TILE - size * 0.6;
+        if (!img) continue;
+
+        // A contact shadow, so a tree sits in the grass rather than on it.
+        g.fillStyle = 'rgba(24,40,18,0.20)';
+        g.beginPath();
+        g.ellipse(x + size / 2, y + size * 0.86, size * 0.26, size * 0.1, 0, 0, Math.PI * 2);
+        g.fill();
+        g.drawImage(img, x, y, size, size);
+      }
+    }
+  }
 }
 
 // -------------------------------------------------------------- renderer --

@@ -13,16 +13,44 @@
 
 const BASE = `${import.meta.env.BASE_URL}kenney/`;
 
-/** Terrain, with several interchangeable tiles per type for visual variety. */
+/**
+ * The ground each terrain is drawn on.
+ *
+ * Note that forest uses the *grass* tiles. Drawing forest as a tile with trees
+ * printed on it is what made the map look like a spreadsheet: every tree landed
+ * on a 32-pixel lattice and the eye read the grid instead of the wood. Trees
+ * are now scattered sprites (see DECOR) at positions that ignore tile edges, so
+ * the ground underneath can stay plain.
+ */
 export const TERRAIN_TILES: Record<string, string[]> = {
   water: ['tile/27', 'tile/28'],
-  // Deliberately only the two bare tiles. The pack's sparse-bush tile reads as
-  // woodland at a glance, and grass has to be unmistakable: it is the terrain
-  // that decides where a Farm may stand.
   grass: ['tile/57', 'tile/58'],
-  forest: ['tile/44', 'tile/46', 'tile/47', 'tile/48'],
+  forest: ['tile/57', 'tile/58'],
   hills: ['tile/15', 'tile/16'],
   desert: ['tile/01', 'tile/02'],
+};
+
+/**
+ * Things strewn across the ground, per terrain: how many to a tile, how big,
+ * and which sprites to choose from. Density is a range so that clumps thin out
+ * and thicken naturally instead of reading as a uniform texture.
+ */
+export interface Decor {
+  sprites: string[];
+  /** Minimum and maximum items per tile. */
+  min: number;
+  max: number;
+  /** Sprite size as a fraction of a tile. */
+  scale: [number, number];
+}
+
+export const DECOR: Record<string, Decor> = {
+  forest: { sprites: ['env/01', 'env/02', 'env/03', 'env/04'], min: 2, max: 4, scale: [0.85, 1.25] },
+  hills: { sprites: ['env/08', 'env/09', 'env/10', 'env/11'], min: 1, max: 2, scale: [0.6, 0.95] },
+  // A stray bush or fallen log, sparse enough that open ground still reads as
+  // open ground — a Farm has to be placeable on it at a glance.
+  grass: { sprites: ['env/13', 'env/06'], min: 0, max: 1, scale: [0.4, 0.6] },
+  desert: { sprites: ['env/08'], min: 0, max: 1, scale: [0.4, 0.6] },
 };
 
 /**
@@ -105,6 +133,7 @@ export function sprite(name: string): HTMLImageElement | null {
 /** Warm the cache so the first frame is not drawn full of placeholders. */
 export function preloadSprites(): void {
   for (const list of Object.values(TERRAIN_TILES)) list.forEach(sprite);
+  for (const d of Object.values(DECOR)) d.sprites.forEach(sprite);
   Object.values(BUILDING_SPRITES).forEach(sprite);
   Object.values(UNIT_SPRITES).forEach(sprite);
   Object.values(RESOURCE_SPRITES).forEach(sprite);

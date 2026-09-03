@@ -154,7 +154,9 @@ body::before {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
-  align-items: stretch;
+  /* Not `stretch`: that made the resource strip match the height of the taller
+     age badge beside it, leaving a wide empty band under the chips. */
+  align-items: start;
   margin-bottom: 14px;
 }
 

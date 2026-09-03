@@ -66,6 +66,14 @@ export interface Worker {
   path: number[];
   /** Cosmetic only: keeps a crowd from marching in lockstep. */
   bob: number;
+  /**
+   * Where this citizen is ambling to right now — a tree to cut, a corner of a
+   * field, or just somewhere else in the square. Runtime only, never saved:
+   * on load everyone simply picks a new one.
+   */
+  tgt: { x: number; y: number } | null;
+  /** Seconds left standing still, working or loitering. */
+  wait: number;
 }
 
 export interface GameMap {
@@ -368,6 +376,8 @@ export function deserializeMap(raw: unknown): GameMap | null {
       phase: post === null ? 'idle' : 'work',
       path: [],
       bob: Math.random() * 6,
+      tgt: null,
+      wait: Math.random() * 2,
     });
   }
 

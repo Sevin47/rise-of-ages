@@ -171,11 +171,33 @@ function mapInfo(g: GameState): MapInfo {
 
 let dirty = true;
 
+/**
+ * Repainting rewrites the overlay's innerHTML, which destroys every element in
+ * it — including whatever the player had scrolled. At four repaints a second
+ * that made the panels impossible to scroll at all: they snapped back to the
+ * top before you could read anything. Scroll offsets are therefore carried
+ * across the rebuild, keyed by a stable name on each scrollable region.
+ */
 function paint(): void {
+  const offsets = new Map<string, [number, number]>();
+  for (const el of overlay.querySelectorAll<HTMLElement>('[data-scroll]')) {
+    if (el.scrollTop || el.scrollLeft) {
+      offsets.set(el.dataset.scroll!, [el.scrollTop, el.scrollLeft]);
+    }
+  }
+
   overlay.innerHTML =
     screen === 'menu' || !state
       ? renderMenu(savedGame, ui)
       : render(state, derive(state), ui, mapInfo(state));
+
+  for (const el of overlay.querySelectorAll<HTMLElement>('[data-scroll]')) {
+    const saved = offsets.get(el.dataset.scroll!);
+    if (!saved) continue;
+    el.scrollTop = saved[0];
+    el.scrollLeft = saved[1];
+  }
+
   dirty = false;
 }
 

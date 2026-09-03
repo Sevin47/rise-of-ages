@@ -19,8 +19,10 @@ import {
   MAP_H,
   placementById,
   slotsOf,
+  terrainAt,
   TILE,
   walkable,
+  type Terrain,
   type GameMap,
   type Placement,
   type Worker,
@@ -266,33 +268,157 @@ export function recallAll(map: GameMap): void {
 
 // -------------------------------------------------------------- movement --
 
+// Ambling is much slower than commuting: a citizen crossing the valley to a new
+// job is travelling, a citizen at work is pottering about.
+const WORK_SPEED = 26;
+const IDLE_SPEED = 17;
+
+/** Terrain a building's crew actually goes out to work on. */
+const WORKS_ON: Partial<Record<string, Terrain>> = {
+  camp: 'forest',
+  mine: 'hills',
+  farm: 'grass',
+  well: 'desert',
+};
+
+/** A random open point inside a tile, so nobody stands dead centre. */
+function pointInTile(tx: number, ty: number): { x: number; y: number } {
+  return {
+    x: (tx + 0.2 + Math.random() * 0.6) * TILE,
+    y: (ty + 0.2 + Math.random() * 0.6) * TILE,
+  };
+}
+
 /**
- * Where a worker stands once they arrive: spaced around the building so a full
- * site reads as a crew rather than one sprite with others hidden underneath.
+ * Somewhere for a working citizen to go next: either a patch of the terrain
+ * their building lives off — trees for a camp, rock for a mine, open field for
+ * a farm — or a spot beside the building itself, as though carrying something
+ * back. Alternating between the two is what makes a site look worked rather
+ * than merely occupied.
  */
-function workSpot(p: Placement, slot: number, total: number): { x: number; y: number } {
+function workTarget(map: GameMap, p: Placement): { x: number; y: number } {
+  const wants = WORKS_ON[p.def];
+  const n = footprint(p.def);
+
+  if (wants && Math.random() < 0.62) {
+    // Search outward for the right ground, so a crew works the nearest trees
+    // rather than a random tree on the far side of the wood.
+    for (let r = 1; r <= 4; r++) {
+      const found: [number, number][] = [];
+      for (let dy = -r; dy <= r + n; dy++) {
+        for (let dx = -r; dx <= r + n; dx++) {
+          const tx = p.tx + dx;
+          const ty = p.ty + dy;
+          if (!walkable(map, tx, ty)) continue;
+          if (terrainAt(map, tx, ty) !== wants) continue;
+          found.push([tx, ty]);
+        }
+      }
+      if (found.length) {
+        const [tx, ty] = found[Math.floor(Math.random() * found.length)];
+        return pointInTile(tx, ty);
+      }
+    }
+  }
+
+  // Fall back to milling around the building.
   const c = centreOf(p);
-  const r = (footprint(p.def) * TILE) / 2 + 5;
-  const a = (slot / Math.max(1, total)) * Math.PI * 2 + p.id;
-  return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+  const a = Math.random() * Math.PI * 2;
+  const d = (n * TILE) / 2 + 4 + Math.random() * 12;
+  return { x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d };
+}
+
+/** Somewhere for an unemployed citizen to drift to, near where they already are. */
+function idleTarget(map: GameMap, w: Worker, home: { x: number; y: number } | null): { x: number; y: number } {
+  const anchor = home ?? { x: w.x, y: w.y };
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 20 + Math.random() * 130;
+    const x = anchor.x + Math.cos(a) * d;
+    const y = anchor.y + Math.sin(a) * d;
+    const tx = Math.floor(x / TILE);
+    const ty = Math.floor(y / TILE);
+    if (walkable(map, tx, ty)) return { x, y };
+  }
+  return { x: w.x, y: w.y };
+}
+
+/**
+ * Step toward a point, refusing to walk onto blocked ground. Ambling is
+ * straight-line rather than pathfound — these are short local hops and A* for
+ * every one of them would be absurd — but a straight line between two open
+ * points can still cut through a building, and villagers strolling over the
+ * castle roof looked exactly as wrong as it sounds. Blocked means the walk is
+ * abandoned and a new destination picked next tick.
+ */
+function stepToward(
+  map: GameMap,
+  w: Worker,
+  tgt: { x: number; y: number },
+  speed: number,
+  dt: number,
+): boolean {
+  const dx = tgt.x - w.x;
+  const dy = tgt.y - w.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 1.5) return true;
+
+  const step = Math.min(d, speed * dt);
+  const nx = w.x + (dx / d) * step;
+  const ny = w.y + (dy / d) * step;
+  if (!walkable(map, Math.floor(nx / TILE), Math.floor(ny / TILE))) return true;
+
+  w.x = nx;
+  w.y = ny;
+  return false;
+}
+
+/**
+ * Walk anyone standing on blocked ground out to the nearest open tile.
+ *
+ * People end up inside buildings legitimately — a city raised over them, or an
+ * older save written before movement was checked. They cannot be left to sort
+ * it out by wandering, for two reasons: a strict destination check walls them
+ * in permanently, since the first step out of a building is still inside it,
+ * and simply exempting them lets them stroll about inside the walls. So being
+ * stuck is handled as its own case, with one unambiguous destination.
+ *
+ * Returns true if it took charge of this citizen for the frame.
+ */
+function escapeIfStuck(map: GameMap, w: Worker, dt: number): boolean {
+  const here = tileOf(w);
+  if (walkable(map, here % MAP_W, Math.floor(here / MAP_W))) return false;
+
+  const open = nearestOpen(map, here);
+  const tx = (open % MAP_W + 0.5) * TILE;
+  const ty = (Math.floor(open / MAP_W) + 0.5) * TILE;
+  const dx = tx - w.x;
+  const dy = ty - w.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const step = Math.min(d, WORK_SPEED * dt);
+  w.x += (dx / d) * step;
+  w.y += (dy / d) * step;
+
+  // Whatever they were heading for is no longer relevant.
+  w.tgt = null;
+  w.wait = 0;
+  return true;
 }
 
 export function updateWorkers(map: GameMap, dt: number): void {
-  // Index posted workers so each gets a distinct standing spot.
-  const crews = new Map<number, Worker[]>();
-  for (const w of map.workers) {
-    if (w.post === null) continue;
-    let crew = crews.get(w.post);
-    if (!crew) crews.set(w.post, (crew = []));
-    crew.push(w);
-  }
+  // The nearest city is where the unemployed congregate. Computed once rather
+  // than per citizen, since there are only ever a handful of cities.
+  const cities = map.placements.filter((p) => p.def === 'city').map(centreOf);
 
   for (const w of map.workers) {
     w.bob += dt;
+
     if (w.post === null) {
       w.phase = 'idle';
+      idleAbout(map, w, cities, dt);
       continue;
     }
+
     const target = placementById(map, w.post);
     if (!target) {
       unpost(w);
@@ -300,36 +426,86 @@ export function updateWorkers(map: GameMap, dt: number): void {
     }
 
     if (w.path.length) {
-      // Walk the remaining waypoints, spending the whole frame's distance.
-      let budget = SPEED * dt;
-      while (budget > 0 && w.path.length) {
-        const t = w.path[0];
-        const tx = (t % MAP_W) * TILE + TILE / 2;
-        const ty = Math.floor(t / MAP_W) * TILE + TILE / 2;
-        const dx = tx - w.x;
-        const dy = ty - w.y;
-        const d = Math.hypot(dx, dy);
-        if (d <= budget) {
-          w.x = tx;
-          w.y = ty;
-          budget -= d;
-          w.path.shift();
-        } else {
-          w.x += (dx / d) * budget;
-          w.y += (dy / d) * budget;
-          budget = 0;
-        }
-      }
-      if (!w.path.length) w.phase = 'work';
+      commute(w, dt);
       continue;
     }
 
-    // Arrived: settle onto the assigned standing spot and start producing.
+    // Arrived, and now working the site.
     w.phase = 'work';
-    const crew = crews.get(w.post)!;
-    const spot = workSpot(target, crew.indexOf(w), crew.length);
-    w.x += (spot.x - w.x) * Math.min(1, dt * 4);
-    w.y += (spot.y - w.y) * Math.min(1, dt * 4);
+    if (escapeIfStuck(map, w, dt)) continue;
+    if (w.wait > 0) {
+      w.wait -= dt;
+      continue;
+    }
+    if (!w.tgt) w.tgt = workTarget(map, target);
+    if (stepToward(map, w, w.tgt, WORK_SPEED, dt)) {
+      w.tgt = null;
+      // A pause at each stop reads as the actual work being done.
+      w.wait = 0.7 + Math.random() * 1.9;
+    }
+  }
+}
+
+/** Follow the remaining waypoints of a commute, spending the whole frame's distance. */
+function commute(w: Worker, dt: number): void {
+  let budget = SPEED * dt;
+  while (budget > 0 && w.path.length) {
+    const t = w.path[0];
+    const tx = (t % MAP_W) * TILE + TILE / 2;
+    const ty = Math.floor(t / MAP_W) * TILE + TILE / 2;
+    const dx = tx - w.x;
+    const dy = ty - w.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= budget) {
+      w.x = tx;
+      w.y = ty;
+      budget -= d;
+      w.path.shift();
+    } else {
+      w.x += (dx / d) * budget;
+      w.y += (dy / d) * budget;
+      budget = 0;
+    }
+  }
+  if (!w.path.length) {
+    w.phase = 'work';
+    w.tgt = null;
+    w.wait = 0;
+  }
+}
+
+/**
+ * Unemployed citizens drift around the nearest city instead of standing in a
+ * heap where they spawned. Before this they were invisible: a hundred idle
+ * people occupied the same few pixels, so the headcount in the panel looked
+ * like a lie.
+ */
+function idleAbout(
+  map: GameMap,
+  w: Worker,
+  cities: { x: number; y: number }[],
+  dt: number,
+): void {
+  if (escapeIfStuck(map, w, dt)) return;
+  if (w.wait > 0) {
+    w.wait -= dt;
+    return;
+  }
+  if (!w.tgt) {
+    let home: { x: number; y: number } | null = null;
+    let best = Infinity;
+    for (const c of cities) {
+      const d = Math.hypot(c.x - w.x, c.y - w.y);
+      if (d < best) {
+        best = d;
+        home = c;
+      }
+    }
+    w.tgt = idleTarget(map, w, home);
+  }
+  if (stepToward(map, w, w.tgt, IDLE_SPEED, dt)) {
+    w.tgt = null;
+    w.wait = 0.8 + Math.random() * 3.5;
   }
 }
 
@@ -351,9 +527,11 @@ export function syncWorkers(state: GameState, map: GameMap): void {
   if (map.workers.length < want) {
     const home = map.placements.find((p) => p.def === 'city');
     const c = home ? centreOf(home) : { x: WORLD_CENTRE.x, y: WORLD_CENTRE.y };
+    // Outside the walls, not inside them: a city covers three tiles.
+    const clear = home ? (footprint(home.def) * TILE) / 2 + 8 : 20;
     while (map.workers.length < want) {
       const a = Math.random() * Math.PI * 2;
-      const d = 18 + Math.random() * 26;
+      const d = clear + Math.random() * 40;
       map.workers.push({
         id: map.nextWorker++,
         x: c.x + Math.cos(a) * d,
@@ -362,6 +540,8 @@ export function syncWorkers(state: GameState, map: GameMap): void {
         phase: 'idle',
         path: [],
         bob: Math.random() * 6,
+        tgt: null,
+        wait: Math.random() * 3,
       });
     }
   }

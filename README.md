@@ -36,7 +36,10 @@ Industrial Age on. Each has a storage cap, and the cap matters — the price of 
 next age is usually larger than your larder can hold until you have built for it.
 
 **Citizens.** They arrive on their own toward a population cap and eat Food while
-they do. Every one of them is a unit on the map. Buildings open *posts*, and a
+they do. Every one of them is a unit on the map, and they behave like it: a
+woodcutter's crew works its way between the camp and the surrounding trees, a
+mine's crew between the shaft and the rock, and the unemployed drift around the
+nearest city rather than standing in a heap. Buildings open *posts*, and a
 citizen produces only once they have walked to one and stopped — a crew crossing
 the valley is costing you food and earning nothing on the way. Gathering itself
 is continuous, the way Rise of Nations does it: they stand at the site and the
@@ -85,7 +88,15 @@ given here and in `public/kenney/CREDITS.txt` because it is deserved.
 - [Board Game Icons](https://kenney.nl/assets/board-game-icons) — the six
   resource icons
 
-Only the 34 sprites the game actually uses are checked in, at 133 KB total.
+Ground is deliberately not drawn as "forest tiles". Printing trees onto a tile
+put every trunk on a 32-pixel lattice, and the eye read the grid instead of the
+wood. Forest is now plain grass with trees scattered *over* it at positions that
+ignore tile edges and are allowed to overhang them, and the ground layer is
+blurred before the scatter goes on top — which turns stair-stepped coastlines
+into shorelines. `bakeTerrain` in `src/render.ts` does this in three passes and
+the order is the whole trick.
+
+Only the sprites the game actually uses are checked in, around 250 KB total.
 `src/sprites.ts` holds the whole mapping from game concept to sprite file, and
 it is the one place to edit when swapping art. Two notes on choices made there,
 because they are not obvious:

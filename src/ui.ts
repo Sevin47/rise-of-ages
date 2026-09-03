@@ -149,9 +149,11 @@ function costRow(state: GameState, cost: Cost): string {
 }
 
 function panel(title: string, note: string, body: string): string {
+  // The key survives the rebuild; main.ts uses it to restore scroll position.
+  const key = title.toLowerCase().replace(/[^a-z]+/g, '-');
   return `<div class="panel"><div class="sheet">
     <div class="panel-title"><span>${title}</span>${note ? `<small>${note}</small>` : ''}</div>
-    <div class="panel-body">${body}</div>
+    <div class="panel-body" data-scroll="panel-${key}">${body}</div>
   </div></div>`;
 }
 
@@ -256,7 +258,7 @@ function chronicle(state: GameState): string {
   const lines = state.log
     .map((l) => `<div class="${l.kind}">${esc(l.msg)}</div>`)
     .join('');
-  return panel('Chronicle', '', `<div class="log">${lines}</div>`);
+  return panel('Chronicle', '', `<div class="log" data-scroll="log">${lines}</div>`);
 }
 
 // ------------------------------------------------------------------ tabs
@@ -308,7 +310,7 @@ ${esc(why)}">
 
   return `<div class="palette">
     <div class="palette-hint">${hint}</div>
-    <div class="palette-row">${items}</div>
+    <div class="palette-row" data-scroll="palette">${items}</div>
   </div>`;
 }
 
@@ -664,7 +666,7 @@ export function render(state: GameState, d: Derived, ui: UiState, info: MapInfo)
     <div class="hud-left">${people(state, d, info)}${chronicle(state)}</div>
     <div class="hud-right">
       <div class="tabs">${tabs}</div>
-      ${ui.tab ? `<div class="drawer">${content}</div>` : ''}
+      ${ui.tab ? `<div class="drawer" data-scroll="drawer">${content}</div>` : ''}
     </div>
     <div class="hud-bottom">${selectionPanel(state, d, info)}${buildPalette(state, d, info)}</div>
     ${dialog(ui, state)}`;
