@@ -76,6 +76,31 @@ static func read(path: String = PATH) -> Dictionary:
 	}
 
 
+## A short description of a save without rebuilding it.
+##
+## `read` constructs a WorldMap, which regenerates terrain from the seed before
+## the stored terrain overwrites it. That is wasted work for a menu that only
+## wants to say "Ancient Age, 12 citizens", so this reads the raw record and
+## touches nothing else.
+static func peek(path: String = PATH) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var raw = f.get_var(true)
+	f.close()
+	if typeof(raw) != TYPE_DICTIONARY or raw.get("version", 0) != VERSION:
+		return {}
+
+	return {
+		"age": raw["state"]["age"],
+		"citizens": int(raw["state"]["citizens"]),
+		"buildings": raw["placements"].size(),
+		"saved_at": float(raw.get("saved_at", 0.0)),
+	}
+
+
 static func has_save(path: String = PATH) -> bool:
 	return FileAccess.file_exists(path)
 

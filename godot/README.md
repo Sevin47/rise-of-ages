@@ -206,10 +206,33 @@ Time away is stepped a minute at a time rather than applied as one huge tick,
 because the economy is not linear in dt: caps clamp, stores run dry and
 citizens starve, and one eight-hour tick would skip straight past all of it.
 
+## The menu
+
+`main.tscn` is the menu now, and it owns the game rather than being part of it.
+Continue resumes the save, New Nation replaces it after asking, and Escape in
+play puts an armed building down first and only leaves once there is nothing to
+cancel.
+
+The invariant is worth stating because it is the one that bites. **No game
+exists while the menu is up.** A menu that keeps a world running behind it for
+the sake of a moving backdrop has that world's autosave fire every ten seconds,
+overwriting the very save Continue is offering. Here it cannot: nothing has
+been instantiated, so there is nothing to write. `verify_menu.gd` sits on the
+menu for longer than the autosave interval and checks the timestamp has not
+moved.
+
+    godot --path godot --script verify_menu.gd
+
+It also walks the round trip a player makes: cold start with Continue greyed
+out, New Nation, play, leave, Continue, and finally New Nation over an existing
+save, which has to ask first and then really replace it.
+
+`SaveGame.peek` reads the record without rebuilding it, so the menu can say
+"Ancient Age, 4 citizens, 3 buildings" without regenerating terrain to do it.
+
 ### Not there yet
 
-No wonders, no trade routes, no menu, and no way to start a second nation
-without deleting the save. All exist in the TypeScript build.
+No wonders and no trade routes. Both exist in the TypeScript build.
 
 ## Running it
 
@@ -227,6 +250,7 @@ or `Sim`:
 | `content.gd` | the static tables, ported from `src/content.ts` |
 | `sim.gd` | `derive`, `tick`, costs and actions, from `src/sim.ts` |
 | `balance.gd` | the autoplayer, from `balance.ts` |
+| `main.gd` | the menu, and the owner of the game scene |
 
 ## Notes for whoever takes this further
 

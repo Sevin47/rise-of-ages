@@ -13,7 +13,7 @@ func _init() -> void:
 	# run inherits whatever the last one left behind and stops being a test of a
 	# fresh nation.
 	SaveGame.erase()
-	game = load("res://main.tscn").instantiate()
+	game = load("res://game.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
 	await process_frame
@@ -119,13 +119,20 @@ func _init() -> void:
 	print("           state age=%d food=%.0f  root children=%d" % [
 		game.state["age"], game.state["res"]["food"], root.get_child_count()
 	])
-	# The viewport texture lags a frame or two behind the state, so a capture
-	# taken immediately shows the HUD as it was before the last change.
-	for i in 4:
-		await process_frame
-		await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png("res://play.png")
-	print("wrote play.png")
+	# Headless draws nothing, so frame_post_draw never fires and awaiting it
+	# hangs forever. Every check above has already run by this point; the
+	# screenshot is the one part that genuinely needs a window.
+	if DisplayServer.get_name() == "headless":
+		print("headless, so no screenshot")
+	else:
+		# The viewport texture lags a frame or two behind the state, so a
+		# capture taken immediately shows the HUD as it was before the last
+		# change.
+		for i in 4:
+			await process_frame
+			await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://play.png")
+		print("wrote play.png")
 	quit()
 
 

@@ -23,7 +23,7 @@ func _init() -> void:
 	SaveGame.erase(TEST_PATH)
 	SaveGame.erase()
 
-	game = load("res://main.tscn").instantiate()
+	game = load("res://game.tscn").instantiate()
 	root.add_child(game)
 	await _run(1.0)
 

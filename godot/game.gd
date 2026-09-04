@@ -16,6 +16,10 @@ var world: WorldMap
 var units: Units
 var state: Dictionary
 
+## Set by the menu before this scene enters the tree. When true the save on
+## disk is ignored and overwritten by the first autosave.
+var start_new := false
+
 ## Building the player has armed for placement, or "" for none.
 var ghost_def := ""
 var ghost_tile := Vector2i(-1, -1)
@@ -48,7 +52,7 @@ func _ready() -> void:
 	# autosave.
 	get_tree().set_auto_accept_quit(false)
 
-	var saved := SaveGame.read()
+	var saved := {} if start_new else SaveGame.read()
 	var restored := not saved.is_empty()
 	if restored:
 		world = saved["world"]
@@ -104,6 +108,11 @@ func _ready() -> void:
 			_say("Nation restored. %d citizens, %s." % [
 				int(state["citizens"]), Content.AGES[state["age"]]["name"]
 			])
+	elif start_new:
+		# Replacing a nation happens the moment it is chosen, not ten seconds
+		# later at the first autosave. Otherwise quitting in between resumes the
+		# nation the player just said to replace.
+		SaveGame.write(state, world, units)
 
 
 # ------------------------------------------------------------------ loop
@@ -132,6 +141,13 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		SaveGame.write(state, world, units)
 		get_tree().quit()
+
+
+## Save and hand the screen back to the menu.
+func leave_to_menu() -> void:
+	SaveGame.write(state, world, units)
+	get_parent().call_deferred("show_menu")
+	queue_free()
 
 
 func _duration(seconds: float) -> String:
@@ -242,6 +258,14 @@ func _sync_citizen_nodes() -> void:
 # ----------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		# With a building armed, Escape puts it down. Otherwise it leaves.
+		if ghost_def != "":
+			_set_ghost("")
+		elif get_parent() != null and get_parent().has_method("show_menu"):
+			leave_to_menu()
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			_camera.zoom *= 1.1
