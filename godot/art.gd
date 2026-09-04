@@ -104,7 +104,43 @@ static func building_scale(n: int) -> float:
 ## Every layer has to sort as one object. Left to itself Godot sorts each
 ## sprite by its own Y, and a roof sits higher up the screen than the walls
 ## under it, so it would sort behind them and vanish.
+## Buildings rendered from art/blender/render_buildings.py, when one exists.
+const RENDERED_DIR := "res://assets/rendered/"
+
+
+static func has_rendered(def: String) -> bool:
+	return ResourceLoader.exists(RENDERED_DIR + def + ".png")
+
+
+## A rendered building needs no assembly.
+##
+## Compare this with the tileset path below. That one stacks layers, shrinks
+## them, and lifts each by a hand-measured amount that has to be re-tuned
+## whenever a piece changes. Here the sprite was taken through the same camera
+## the game draws with, with the footprint centred on the world origin, so the
+## image centre *is* the tile centre: drawing it centred is the whole placement.
+static func make_rendered(def: String, tx: int, ty: int) -> Node2D:
+	var n := WorldMap.footprint(def)
+	var mid := Iso.to_screen(tx + (n - 1) / 2.0, ty + (n - 1) / 2.0)
+
+	var group := Node2D.new()
+	# Y carries the sort order, as with every other entity.
+	group.position = Vector2(0.0, mid.y)
+
+	var s := Sprite2D.new()
+	s.texture = load(RENDERED_DIR + def + ".png")
+	s.centered = true
+	# Authored one tile across, so an n-tile footprint is just n times bigger.
+	s.scale = Vector2(n, n)
+	s.position = Vector2(mid.x, 0.0)
+	group.add_child(s)
+	return group
+
+
 static func make_building(def: String, tx: int, ty: int) -> Node2D:
+	if has_rendered(def):
+		return make_rendered(def, tx, ty)
+
 	var sheet: Texture2D = load(VILLAGE_SHEET)
 	var n := WorldMap.footprint(def)
 	var mid := Iso.to_screen(tx + (n - 1) / 2.0, ty + (n - 1) / 2.0)

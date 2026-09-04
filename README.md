@@ -32,6 +32,37 @@ bottom. That bar holds the build card on the left, the minimap in the middle,
 and a context panel on the right showing whatever is selected, or the workforce
 when nothing is.
 
+## Making the art
+
+Buildings can be rendered rather than assembled. `art/blender/render_buildings.py`
+defines them as geometry in Python and renders them through one orthographic
+camera under one set of lights:
+
+    blender --background --python art/blender/render_buildings.py
+
+Assembling a building from a tileset is a separate judgement each time about
+which pieces line up, and they drift: a roof overhangs on one and not the next,
+walls catch the light from different directions. Rendering makes matching the
+default instead of something to check for.
+
+The camera comes from the game's own tile size. 132x66 is a 2:1 diamond, so the
+elevation is `asin(66/132)` = 30 degrees — not the 26.57 usually quoted, which
+is `atan(1/2)` and describes the slope of the tile edges on screen rather than
+where the camera stands.
+
+Because each building is modelled with its footprint centred on the world origin
+and the camera looks at that origin, the image centre is the tile centre. Godot
+draws the sprite centred and it lands correctly, with no per-building offset to
+measure and no roof lift to tune.
+
+    blender --background --python art/blender/render_buildings.py -- --check
+
+renders a bare one-tile plate and measures it. Extent is the wrong thing to
+measure under a reconstruction filter, which bleeds outwards at zero alpha and
+eats the thin tips of the diamond at half, so it checks total coverage and the
+centroid, which a symmetric filter cannot shift. The plate comes out at 4356
+px², exactly `132 x 66 / 2`.
+
 ## Controls
 
 | | |
