@@ -9,7 +9,16 @@ everything you own.
 There is no combat and no enemy nation. The whole game is the economy: what to
 build, where to put it, and who to send.
 
-Play: `npm install && npm run dev`
+Play it at **[sevin47.github.io/rise-of-ages](https://sevin47.github.io/rise-of-ages/)**,
+or locally with `npm install && npm run dev`.
+
+There are two builds of the same game. The web one at the root is the original,
+and the isometric Godot one is at
+**[/godot/](https://sevin47.github.io/rise-of-ages/godot/)**, linked from the
+menu. They share a tuned economy rather than a codebase: `godot/sim.gd` is a
+line-for-line port of `src/sim.ts`, and both are held to the same balance probe,
+which still ends at 2h24m with 515 citizens either way. The Godot build is a
+single-threaded web export, so it downloads about 38 MB before it starts.
 
 The game opens on a menu rather than dropping you straight onto a map:
 **Continue** (with a summary of the nation waiting for you), **New Nation**,
