@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxk46wl4i802j"
-path="res://.godot/imported/house.png-f1d10960e4baecbf202b3b988ba4392f.ctex"
+uid="uid://c0le3exsjnl84"
+path="res://.godot/imported/granary.png-40eb3371b2a97aff13d07119678d6c34.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/rendered/house.png"
-dest_files=["res://.godot/imported/house.png-f1d10960e4baecbf202b3b988ba4392f.ctex"]
+source_file="res://assets/rendered/granary.png"
+dest_files=["res://.godot/imported/granary.png-40eb3371b2a97aff13d07119678d6c34.ctex"]
 
 [params]
 

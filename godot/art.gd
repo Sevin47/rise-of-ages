@@ -130,8 +130,9 @@ static func make_rendered(def: String, tx: int, ty: int) -> Node2D:
 	var s := Sprite2D.new()
 	s.texture = load(RENDERED_DIR + def + ".png")
 	s.centered = true
-	# Authored one tile across, so an n-tile footprint is just n times bigger.
-	s.scale = Vector2(n, n)
+	# No scaling. Each building is modelled at its real footprint and rendered
+	# on a canvas sized to suit, so scaling here would only magnify pixels that
+	# were already the right size.
 	s.position = Vector2(mid.x, 0.0)
 	group.add_child(s)
 	return group
