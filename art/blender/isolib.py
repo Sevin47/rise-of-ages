@@ -60,6 +60,120 @@ def make_material(name, rgb, roughness=0.85):
     return mat
 
 
+# ------------------------------------------------------------------ texture
+
+## How strongly a texture varies the base colour, as a fraction of it.
+##
+## Small on purpose. A tile is 132 pixels across and a citizen forty; at that
+## size a texture's job is to stop a face reading as a flat fill, not to be
+## legible in its own right.
+##
+## The first pass used 0.11 with fine features and the temple came out looking
+## sandpapered rather than built. Two things fix that together and neither does
+## alone: less contrast, and *coarser* features. Fine and strong reads as
+## noise; coarse and faint reads as material.
+TEXTURE_AMOUNT = 0.07
+
+
+def _shade(rgb, k):
+    """The base colour lightened or darkened, staying in gamut."""
+    return tuple(min(1.0, max(0.0, c * (1.0 + k))) for c in rgb)
+
+
+def textured_material(name, rgb, kind="flat", scale=6.0, amount=None,
+                      roughness=0.85):
+    """A material that varies across a surface without needing UVs.
+
+    Everything here is generated in the shader from *Object* coordinates, so
+    nothing has to be unwrapped. That matters because this geometry is built
+    from primitives in code: there are no seams to place and no UV layout to
+    maintain, and a brick pattern lines up across a wall and its gable because
+    both are reading the same coordinate space.
+
+    The variation is always around the base colour rather than replacing it, so
+    a palette change still governs what a surface looks like.
+
+    kinds:
+      flat    no texture at all, for metal, gold, glass and water
+      grain   fine mottling, for plaster, earth, sand and cloth
+      rough   coarser and stronger, for rock and unworked stone
+      wood    noise stretched along one axis, so it reads as grain
+      brick   courses with mortar, for masonry
+      tile    smaller squarer courses, for roofs
+    """
+    amount = TEXTURE_AMOUNT if amount is None else amount
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    bsdf = nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = roughness
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = 0.1
+
+    if kind == "flat":
+        bsdf.inputs["Base Color"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
+        return mat
+
+    coord = nodes.new("ShaderNodeTexCoord")
+    mapping = nodes.new("ShaderNodeMapping")
+    links.new(coord.outputs["Object"], mapping.inputs["Vector"])
+
+    dark = _shade(rgb, -amount)
+    light = _shade(rgb, amount)
+
+    if kind in ("brick", "tile"):
+        tex = nodes.new("ShaderNodeTexBrick")
+        tex.inputs["Color1"].default_value = (*light, 1.0)
+        tex.inputs["Color2"].default_value = (*dark, 1.0)
+        # Mortar is darker than either course, but only just: a strong mortar
+        # line at this size turns a wall into a grid.
+        tex.inputs["Mortar"].default_value = (*_shade(rgb, -amount * 2.0), 1.0)
+        tex.inputs["Scale"].default_value = scale
+        tex.inputs["Mortar Size"].default_value = 0.02
+        tex.inputs["Bias"].default_value = 0.0
+        if kind == "tile":
+            tex.inputs["Brick Width"].default_value = 0.22
+            tex.inputs["Row Height"].default_value = 0.16
+        else:
+            tex.inputs["Brick Width"].default_value = 0.42
+            tex.inputs["Row Height"].default_value = 0.20
+        links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
+        links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        return mat
+
+    # The noise kinds share a graph and differ only in how the coordinates are
+    # scaled going in and how hard the ramp is coming out.
+    tex = nodes.new("ShaderNodeTexNoise")
+    if kind == "wood":
+        # Squashed across the grain and stretched along it.
+        mapping.inputs["Scale"].default_value = (1.0, 1.0, 0.14)
+        tex.inputs["Scale"].default_value = scale
+        tex.inputs["Detail"].default_value = 4.0
+    elif kind == "rough":
+        mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+        tex.inputs["Scale"].default_value = scale * 0.6
+        tex.inputs["Detail"].default_value = 4.0
+    else:  # grain
+        mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+        tex.inputs["Scale"].default_value = scale
+        tex.inputs["Detail"].default_value = 2.0
+    links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
+
+    # A ramp rather than a mix node: its two stops *are* the two shades, so the
+    # colour never leaves the palette and there is no mix-node API to track
+    # across Blender versions.
+    ramp = nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (*dark, 1.0)
+    ramp.color_ramp.elements[1].color = (*light, 1.0)
+    # Wide stops. Noise clusters around the middle, so a narrow ramp turns
+    # gentle variation into hard speckle.
+    ramp.color_ramp.elements[0].position = 0.20
+    ramp.color_ramp.elements[1].position = 0.80
+    links.new(tex.outputs["Fac"], ramp.inputs["Fac"])
+    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    return mat
+
+
 def mesh_from(name, verts, faces, material):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
@@ -357,8 +471,77 @@ PALETTE = {
 }
 
 
-def materials():
-    return {k: make_material(k, v) for k, v in PALETTE.items()}
+## What each palette entry is made of, as (kind, scale).
+##
+## Scale is in world units, because the shader reads object coordinates: a
+## building is one or two units across and a citizen is 0.42, so the small
+## things need a much higher number to show any pattern at all.
+##
+## Metals, water, glass and hair stay flat. A texture on them would only be
+## noise: they have no grain to show at this size, and the flat ones are what
+## give the textured ones something to read against.
+TEXTURES = {
+    "plaster": ("grain", 4.5),
+    "plaster_warm": ("grain", 4.5),
+    "timber": ("wood", 7.0),
+    "timber_light": ("wood", 7.0),
+    "roof": ("tile", 5.5),
+    "roof_dark": ("tile", 5.5),
+    "slate": ("tile", 6.5),
+    "stone": ("brick", 3.5),
+    "stone_dark": ("brick", 3.5),
+    "marble": ("grain", 3.0),
+    "thatch": ("wood", 10.0),
+    "crop": ("wood", 12.0),
+    "soil": ("grain", 5.5),
+    "grass": ("grain", 6.0),
+    "gold": ("flat", 0.0),
+    "iron": ("flat", 0.0),
+    "cloth_red": ("grain", 8.0),
+    "cloth_blue": ("grain", 8.0),
+    "water": ("flat", 0.0),
+    "ore": ("rough", 5.0),
+    "rock": ("rough", 4.0),
+    "rock_light": ("rough", 4.0),
+    "rock_dark": ("rough", 4.0),
+    "shadow": ("flat", 0.0),
+
+    "turf": ("grain", 6.0),
+    "turf_dark": ("grain", 6.0),
+    "turf_light": ("grain", 6.0),
+    "earth": ("grain", 5.5),
+    "earth_dark": ("grain", 5.5),
+    "sand": ("grain", 6.5),
+    "sand_dark": ("grain", 6.5),
+    "sea": ("flat", 0.0),
+    "sea_light": ("flat", 0.0),
+    "bark": ("wood", 9.0),
+    "leaf": ("grain", 7.0),
+    "leaf_light": ("grain", 7.0),
+    "leaf_dark": ("grain", 7.0),
+    "skin": ("flat", 0.0),
+    "tunic": ("grain", 13.0),
+    "tunic_alt": ("grain", 13.0),
+    "hair": ("flat", 0.0),
+    "trousers": ("grain", 13.0),
+    "boot": ("flat", 0.0),
+}
+
+
+def materials(textured=True):
+    """The palette as Blender materials.
+
+    `textured=False` gives the flat version, which is what the calibration
+    check wants: it measures coverage, and a mottled plate would only make the
+    measurement harder to reason about for no gain.
+    """
+    out = {}
+    for k, v in PALETTE.items():
+        kind, scale = TEXTURES.get(k, ("grain", 9.0))
+        if not textured:
+            kind = "flat"
+        out[k] = textured_material(k, v, kind, scale)
+    return out
 
 
 # --------------------------------------------------------------- calibration

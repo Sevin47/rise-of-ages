@@ -52,6 +52,19 @@ Three cameras, for three jobs: tiles straight down, so a square tile stays a
 square and still tiles; buildings and people from 52 degrees, because straight
 down a building is a roof and nothing else; icons lower still.
 
+Surfaces are textured procedurally, in the shader, from *object* coordinates —
+so nothing is unwrapped. That matters for geometry built from primitives in
+code: there are no seams to place and no UV layout to maintain, and a course of
+bricks lines up across a wall and its gable because both read the same
+coordinate space. `isolib.TEXTURES` says what each palette entry is made of:
+brick and roof tile, wood grain, coarse rock, fine mottling, or nothing at all
+for metal and water.
+
+The tuning that matters is contrast against feature size. A first pass used
+strong, fine variation and the temple came out sandpapered rather than built;
+faint and coarse reads as material, strong and fine reads as grit. The flat
+materials earn their place too — they are what the textured ones read against.
+
 The shared camera, lights and primitives live in `art/blender/isolib.py`, which
 is the only reason a tree looks like it belongs on the same ground as a temple.
 Nothing is third-party any more: the Kenney tiles (CC0) and the 2DPIXX pack
