@@ -34,12 +34,23 @@ when nothing is.
 
 ## Making the art
 
-Every asset in the Godot build is generated. Buildings, ground tiles, trees,
-rocks and people are all defined as geometry in Python and rendered through one
-orthographic camera under one set of lights:
+Every asset in both builds is generated. Buildings, ground tiles, trees, rocks,
+people and the resource icons are all defined as geometry in Python and rendered
+through a shared camera and lighting rig:
 
     blender --background --python art/blender/render_buildings.py
     blender --background --python art/blender/render_world.py
+    blender --background --python art/blender/render_web.py
+
+The two builds do not share a projection — Godot draws a 2:1 isometric diamond,
+the web build a square grid from above — but they do share the models. The farm
+on the web map is `render_buildings.build_farm`, the same function, photographed
+from a different camera. That is the payoff for keeping geometry in code rather
+than in a .blend.
+
+Three cameras, for three jobs: tiles straight down, so a square tile stays a
+square and still tiles; buildings and people from 52 degrees, because straight
+down a building is a roof and nothing else; icons lower still.
 
 The shared camera, lights and primitives live in `art/blender/isolib.py`, which
 is the only reason a tree looks like it belongs on the same ground as a temple.

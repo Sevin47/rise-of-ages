@@ -172,10 +172,25 @@ def diamond(name, size, centre, material, thickness=0.0):
 
 # ------------------------------------------------------------------- camera
 
-def setup_camera(px):
+def setup_camera(px, elevation=None, yaw=None, units=None):
+    """The shared camera.
+
+    Defaults to the isometric one the Godot build draws with. The web build is
+    a different projection entirely — a square grid seen from above rather than
+    a 2:1 diamond — so it passes its own angles and its own framing. The models
+    do not change; only where the camera stands does, which is the point of
+    keeping geometry in code.
+
+    `units` is how many Blender units the frame spans. Left out, it is derived
+    so that one tile comes out TILE_W pixels wide, which is what the isometric
+    build needs.
+    """
+    elevation = ELEVATION if elevation is None else elevation
+    yaw = YAW if yaw is None else yaw
+
     cam_data = bpy.data.cameras.new("IsoCam")
     cam_data.type = "ORTHO"
-    cam_data.ortho_scale = px / PX_PER_UNIT
+    cam_data.ortho_scale = (px / PX_PER_UNIT) if units is None else units
 
     cam = bpy.data.objects.new("IsoCam", cam_data)
     bpy.context.collection.objects.link(cam)
@@ -183,7 +198,7 @@ def setup_camera(px):
     # Blender cameras look down their local -Z. With no rotation that is
     # straight down, so the tilt from vertical is 90 degrees minus the
     # elevation above the horizon.
-    cam.rotation_euler = (math.pi / 2.0 - ELEVATION, 0.0, YAW)
+    cam.rotation_euler = (math.pi / 2.0 - elevation, 0.0, yaw)
 
     # Orthographic, so the distance changes nothing but clipping. Far enough
     # out that nothing crosses the near plane.
@@ -270,11 +285,11 @@ def setup_render(engine, px):
                 break
 
 
-def begin(engine, px):
+def begin(engine, px, elevation=None, yaw=None, units=None):
     """A fresh scene with the shared camera and lights, ready to build into."""
     clear_scene()
     setup_render(engine, px)
-    setup_camera(px)
+    setup_camera(px, elevation, yaw, units)
     setup_lights()
 
 

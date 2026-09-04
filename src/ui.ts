@@ -104,14 +104,14 @@ function cheaper(mult: number): string {
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 
 /**
- * Kenney sprites for the things that also appear on the map — resources,
+ * Rendered sprites for the things that also appear on the map — resources,
  * buildings and citizens. Wonders, trade goods and library tracks keep the
- * original hand-drawn icons in `art.ts`, because the pack has no equivalent
- * for a pyramid or a silk route and a generic glyph would say less.
+ * hand-drawn icons in `art.ts`; nothing has been modelled for a pyramid or a
+ * silk route, and a generic glyph would say less.
  */
 function resIcon(id: string): string {
   const name = RESOURCE_SPRITES[id];
-  return name ? `<img class="icon inked" src="${spriteUrl(name)}" alt="">` : art(id);
+  return name ? `<img class="icon" src="${spriteUrl(name)}" alt="">` : art(id);
 }
 
 function buildIcon(def: string): string {

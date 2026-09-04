@@ -1,17 +1,19 @@
 /**
- * The Kenney sprite set: what each game concept looks like, and a loader that
- * hands the renderer an image only once it is safe to draw.
+ * What each game concept looks like, and a loader that hands the renderer an
+ * image only once it is safe to draw.
  *
- * The art is Kenney's Medieval RTS and Board Game Icons packs, both CC0 — see
- * `public/kenney/CREDITS.txt`. Everything is a 64x64 PNG, which is why the
- * renderer can treat every sprite identically and just scale on draw.
+ * The art is generated: `art/blender/render_web.py` builds it from the same
+ * models the Godot build uses, photographed from a different camera, since this
+ * build draws a square grid from above rather than an isometric diamond. Every
+ * sprite is a square PNG, which is why the renderer can treat them identically
+ * and just scale on draw.
  *
  * Files are addressed through `import.meta.env.BASE_URL` because the production
- * build is served from a subpath on GitHub Pages; a hard-coded "/kenney/..."
- * works in dev and 404s in the build.
+ * build is served from a subpath on GitHub Pages; a hard-coded "/art/..." works
+ * in dev and 404s in the build.
  */
 
-const BASE = `${import.meta.env.BASE_URL}kenney/`;
+const BASE = `${import.meta.env.BASE_URL}art/`;
 
 /**
  * The ground each terrain is drawn on.
@@ -23,11 +25,11 @@ const BASE = `${import.meta.env.BASE_URL}kenney/`;
  * the ground underneath can stay plain.
  */
 export const TERRAIN_TILES: Record<string, string[]> = {
-  water: ['tile/27', 'tile/28'],
-  grass: ['tile/57', 'tile/58'],
-  forest: ['tile/57', 'tile/58'],
-  hills: ['tile/15', 'tile/16'],
-  desert: ['tile/01', 'tile/02'],
+  water: ['tile/water_0', 'tile/water_1'],
+  grass: ['tile/grass_0', 'tile/grass_1'],
+  forest: ['tile/grass_0', 'tile/grass_1'],
+  hills: ['tile/hills_0', 'tile/hills_1'],
+  desert: ['tile/desert_0', 'tile/desert_1'],
 };
 
 /**
@@ -45,33 +47,37 @@ export interface Decor {
 }
 
 export const DECOR: Record<string, Decor> = {
-  forest: { sprites: ['env/01', 'env/02', 'env/03', 'env/04'], min: 2, max: 4, scale: [0.85, 1.25] },
-  hills: { sprites: ['env/08', 'env/09', 'env/10', 'env/11'], min: 1, max: 2, scale: [0.6, 0.95] },
+  forest: {
+    sprites: ['env/forest_0', 'env/forest_1', 'env/forest_2', 'env/forest_3'],
+    min: 2, max: 4, scale: [0.85, 1.25],
+  },
+  hills: {
+    sprites: ['env/hills_0', 'env/hills_1', 'env/hills_2', 'env/hills_3'],
+    min: 1, max: 2, scale: [0.6, 0.95],
+  },
   // A stray bush or fallen log, sparse enough that open ground still reads as
   // open ground — a Farm has to be placeable on it at a glance.
-  grass: { sprites: ['env/13', 'env/06'], min: 0, max: 1, scale: [0.4, 0.6] },
-  desert: { sprites: ['env/08'], min: 0, max: 1, scale: [0.4, 0.6] },
+  grass: { sprites: ['env/grass_0', 'env/grass_1'], min: 0, max: 1, scale: [0.4, 0.6] },
+  desert: { sprites: ['env/desert_0'], min: 0, max: 1, scale: [0.4, 0.6] },
 };
 
-/**
- * Which structure stands in for each building. The pack is medieval and the
- * game runs to the Information Age, so these are chosen to read by silhouette
- * rather than to be literal — the Oil Well gets the stone tower because it is
- * the only thing in the set that reads as industrial at 32 pixels.
+/** The structure drawn for each building. Rendered from the model of the same
+ * name in `art/blender/render_buildings.py`, so the two builds show the same
+ * farm from different angles rather than two different farms.
  */
 export const BUILDING_SPRITES: Record<string, string> = {
-  city: 'structure/06', // walled castle — the landmark on the map
-  farm: 'structure/19', // barn with the red door
-  camp: 'structure/21', // cabin with a timber lean-to
-  mine: 'structure/08', // stone adit cut into the hill
-  market: 'structure/07', // stall under an awning
-  library: 'structure/11', // plain stone hall
-  granary: 'structure/23', // round-doored storehouse
-  temple: 'structure/04', // church
-  warehouse: 'structure/03', // long low store
-  workshop: 'structure/20', // house with the forge chimney
-  university: 'structure/05', // stone keep
-  well: 'structure/12', // stone tower
+  city: 'structure/city',
+  farm: 'structure/farm',
+  camp: 'structure/camp',
+  mine: 'structure/mine',
+  market: 'structure/market',
+  library: 'structure/library',
+  granary: 'structure/granary',
+  temple: 'structure/temple',
+  warehouse: 'structure/warehouse',
+  workshop: 'structure/workshop',
+  university: 'structure/university',
+  well: 'structure/well',
 };
 
 /**
@@ -81,19 +87,19 @@ export const BUILDING_SPRITES: Record<string, string> = {
  * two tan ones are indistinguishable at that size.
  */
 export const UNIT_SPRITES = {
-  idle: 'unit/17', // pale, so a crowd of unemployed recedes
-  walk: 'unit/04', // blue, unmistakable while crossing open ground
-  work: 'unit/10', // orange and gold, warm against the fields
+  idle: 'unit/idle', // pale, so a crowd of unemployed recedes
+  walk: 'unit/walk', // blue, unmistakable while crossing open ground
+  work: 'unit/work', // gold, warm against the fields
 } as const;
 
 /** Resource icons for the ledger. */
 export const RESOURCE_SPRITES: Record<string, string> = {
-  food: 'icon/resource_wheat',
-  timber: 'icon/resource_wood',
-  metal: 'icon/resource_iron',
-  wealth: 'icon/pouch',
-  knowledge: 'icon/book_open',
-  oil: 'icon/flask_full',
+  food: 'icon/food',
+  timber: 'icon/timber',
+  metal: 'icon/metal',
+  wealth: 'icon/wealth',
+  knowledge: 'icon/knowledge',
+  oil: 'icon/oil',
 };
 
 /** Public URL for a sprite name, for use in an `<img src>` in the overlay. */

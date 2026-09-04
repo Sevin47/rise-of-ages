@@ -38,9 +38,19 @@ OUT_DIR = os.path.join("godot", "assets", "rendered")
 
 # ---------------------------------------------------------------- buildings
 
+## Whether buildings render the plate they stand on.
+##
+## True for the isometric build, where the plate seats a building against the
+## terrain and stops it looking pasted on. False for the web build, which draws
+## buildings over a terrain tile that is already the ground: there the plate is
+## just a grey tray under every structure.
+WITH_GROUND = True
+
+
 def ground(m, size, colour="soil", z=0.0, thickness=0.03):
-    """The plate a building stands on. It seats the sprite against the terrain,
-    which otherwise leaves buildings looking pasted on."""
+    """The plate a building stands on."""
+    if not WITH_GROUND:
+        return None
     return box("ground", (size, size, thickness), (0.0, 0.0, z), m[colour])
 
 

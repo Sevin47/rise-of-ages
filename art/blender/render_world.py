@@ -55,50 +55,55 @@ def scatter(rng, n, radius=DETAIL_R):
 TILE_THICK = 0.22
 
 
-def tile_grass(m, rng):
-    diamond("top", 1.0, (0.0, 0.0, 0.0), m["turf"], thickness=TILE_THICK)
-    diamond("skirt", 1.0, (0.0, 0.0, -0.06), m["earth_dark"], thickness=TILE_THICK - 0.06)
+def tile_grass(m, rng, size=1.0):
+    diamond("top", size, (0.0, 0.0, 0.0), m["turf"], thickness=TILE_THICK)
+    diamond("skirt", size, (0.0, 0.0, -0.06), m["earth_dark"], thickness=TILE_THICK - 0.06)
     # Tufts, and a few patches of a second green so the surface is not one flat
     # colour under a flat light.
-    for i, (x, y) in enumerate(scatter(rng, 5)):
+    for i, (x, y) in enumerate(scatter(rng, 5, DETAIL_R * size)):
         shade = "turf_light" if i % 2 == 0 else "turf_dark"
-        diamond("patch%d" % i, rng.uniform(0.13, 0.22), (x, y, 0.001), m[shade])
-    for i, (x, y) in enumerate(scatter(rng, 7)):
+        # Round, not square. A square plate reads as a diamond under the
+        # isometric camera and gets away with it, but the web build looks
+        # straight down and it becomes an obvious square stain.
+        cylinder("patch%d" % i, rng.uniform(0.07, 0.11), 0.004, (x, y, 0.0),
+                 m[shade], segments=12)
+    for i, (x, y) in enumerate(scatter(rng, 7, DETAIL_R * size)):
         h = rng.uniform(0.03, 0.06)
         pyramid("tuft%d" % i, (0.035, 0.035), (x, y, 0.0), h,
                 m["turf_light" if i % 3 else "leaf"], peak=0.004)
 
 
-def tile_earth(m, rng):
-    diamond("top", 1.0, (0.0, 0.0, 0.0), m["earth"], thickness=TILE_THICK)
-    diamond("skirt", 1.0, (0.0, 0.0, -0.06), m["earth_dark"], thickness=TILE_THICK - 0.06)
-    for i, (x, y) in enumerate(scatter(rng, 4)):
-        diamond("patch%d" % i, rng.uniform(0.12, 0.24), (x, y, 0.001), m["earth_dark"])
-    for i, (x, y) in enumerate(scatter(rng, 5)):
+def tile_earth(m, rng, size=1.0):
+    diamond("top", size, (0.0, 0.0, 0.0), m["earth"], thickness=TILE_THICK)
+    diamond("skirt", size, (0.0, 0.0, -0.06), m["earth_dark"], thickness=TILE_THICK - 0.06)
+    for i, (x, y) in enumerate(scatter(rng, 4, DETAIL_R * size)):
+        cylinder("patch%d" % i, rng.uniform(0.06, 0.12), 0.004, (x, y, 0.0),
+                 m["earth_dark"], segments=12)
+    for i, (x, y) in enumerate(scatter(rng, 5, DETAIL_R * size)):
         s = rng.uniform(0.04, 0.08)
         pyramid("pebble%d" % i, (s, s), (x, y, 0.0), s * 0.5,
                 m["rock" if i % 2 else "rock_dark"], peak=s * 0.4)
 
 
-def tile_sand(m, rng):
-    diamond("top", 1.0, (0.0, 0.0, 0.0), m["sand"], thickness=TILE_THICK)
-    diamond("skirt", 1.0, (0.0, 0.0, -0.06), m["sand_dark"], thickness=TILE_THICK - 0.06)
+def tile_sand(m, rng, size=1.0):
+    diamond("top", size, (0.0, 0.0, 0.0), m["sand"], thickness=TILE_THICK)
+    diamond("skirt", size, (0.0, 0.0, -0.06), m["sand_dark"], thickness=TILE_THICK - 0.06)
     # Wind ripples rather than scattered dots: sand reads by its lines.
     for i in range(4):
         y = -0.28 + i * 0.19 + rng.uniform(-0.03, 0.03)
         box("ripple%d" % i, (rng.uniform(0.4, 0.7), 0.05, 0.012),
             (rng.uniform(-0.1, 0.1), y, 0.0), m["sand_dark"])
-    for i, (x, y) in enumerate(scatter(rng, 3)):
+    for i, (x, y) in enumerate(scatter(rng, 3, DETAIL_R * size)):
         s = rng.uniform(0.03, 0.055)
         pyramid("pebble%d" % i, (s, s), (x, y, 0.0), s * 0.4, m["rock_light"], peak=s * 0.4)
 
 
-def tile_water(m, rng):
+def tile_water(m, rng, size=1.0):
     # The surface sits below the land's, so a shoreline reads as a drop rather
     # than as two tiles meeting flush.
-    diamond("bed", 1.0, (0.0, 0.0, -0.05), m["sea"], thickness=TILE_THICK - 0.05)
-    diamond("surface", 1.0, (0.0, 0.0, -0.05), m["sea"])
-    for i, (x, y) in enumerate(scatter(rng, 4, 0.34)):
+    diamond("bed", size, (0.0, 0.0, -0.05), m["sea"], thickness=TILE_THICK - 0.05)
+    diamond("surface", size, (0.0, 0.0, -0.05), m["sea"])
+    for i, (x, y) in enumerate(scatter(rng, 4, 0.34 * size)):
         box("ripple%d" % i, (rng.uniform(0.14, 0.26), 0.035, 0.006),
             (x, y, -0.05), m["sea_light"])
 
@@ -174,7 +179,7 @@ def limb(name, width, length, pivot, material, swing):
     return obj
 
 
-def citizen(m, facing_deg, frame):
+def citizen(m, facing_deg, frame, tunic="tunic"):
     """One frame of the walk cycle, facing one way.
 
     Modelled facing +X and turned as a whole, so the cycle is written once and
@@ -192,13 +197,13 @@ def citizen(m, facing_deg, frame):
     parts.append(limb("leg_l", 0.055, LEG_L, (0.0, 0.045, hip), m["trousers"], swing))
     parts.append(limb("leg_r", 0.055, LEG_L, (0.0, -0.045, hip), m["trousers"], -swing))
 
-    torso = box("torso", (0.10, 0.15, TORSO_H), (0.0, 0.0, hip), m["tunic"])
+    torso = box("torso", (0.10, 0.15, TORSO_H), (0.0, 0.0, hip), m[tunic])
     parts.append(torso)
     parts.append(box("belt", (0.105, 0.155, 0.022), (0.0, 0.0, hip + 0.02), m["timber"]))
 
     shoulder = hip + TORSO_H - 0.02
-    parts.append(limb("arm_l", 0.042, 0.145, (0.0, 0.088, shoulder), m["tunic"], arm))
-    parts.append(limb("arm_r", 0.042, 0.145, (0.0, -0.088, shoulder), m["tunic"], -arm))
+    parts.append(limb("arm_l", 0.042, 0.145, (0.0, 0.088, shoulder), m[tunic], arm))
+    parts.append(limb("arm_r", 0.042, 0.145, (0.0, -0.088, shoulder), m[tunic], -arm))
 
     neck = hip + TORSO_H
     parts.append(box("head", (0.085, 0.085, HEAD_R * 2.0), (0.0, 0.0, neck), m["skin"]))
