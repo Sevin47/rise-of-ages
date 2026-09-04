@@ -40,7 +40,7 @@ var _track_rows := {}      ## track id -> {level, cost, button}
 var _build_buttons := {}   ## building id -> Button
 var _building_nodes := {}   ## placement id -> Node2D
 var _citizen_nodes := {}    ## worker id -> Sprite2D
-var _citizen_sheet: Texture2D
+var _citizen_frames: Array = []
 var _dragging := false
 var _since_save := 0.0
 
@@ -62,7 +62,13 @@ func _ready() -> void:
 		world = WorldMap.new()
 		state = Sim.new_game()
 		units = Units.new(world)
-	_citizen_sheet = load(IsoArt.CITIZEN_SHEET)
+	# Held rather than loaded per frame: sixteen textures looked up every tick
+	# for every citizen is a dictionary hit each time, and this is a flat array.
+	for facing in IsoArt.CITIZEN_FACINGS:
+		var row := []
+		for frame in IsoArt.CITIZEN_FRAMES:
+			row.append(IsoArt.citizen_texture(facing, frame))
+		_citizen_frames.append(row)
 
 	_ground = Node2D.new()
 	add_child(_ground)
@@ -181,11 +187,12 @@ func _pan_from_keys(delta: float) -> void:
 func _paint_ground() -> void:
 	for ty in WorldMap.MAP_H:
 		for tx in WorldMap.MAP_W:
-			var tex: Texture2D = load(IsoArt.LAND[world.at(tx, ty)])
 			var s := Sprite2D.new()
-			s.texture = tex
-			s.centered = false
-			s.position = IsoArt.ground_anchor(tex, Iso.to_screen(tx, ty))
+			s.texture = IsoArt.ground_texture(world.at(tx, ty), tx, ty)
+			# A tile is modelled with its origin at the centre of its top face,
+			# so it places exactly like a building: centred on the tile centre.
+			s.centered = true
+			s.position = Iso.to_screen(tx, ty)
 			# Ground is always behind everything, so it is deliberately not in
 			# the y-sorted layer: sorting three thousand static tiles every
 			# frame would cost real time and buy nothing.
@@ -199,17 +206,14 @@ func _paint_ground() -> void:
 ## edges are what break it up, and here they also tell hills from sand, since
 ## every grey tile in the landscape pack turned out to carry a road.
 func _paint_clutter() -> void:
-	var sheet: Texture2D = load(IsoArt.FOREST_SHEET)
 	for ty in WorldMap.MAP_H:
 		for tx in WorldMap.MAP_W:
 			var t := world.at(tx, ty)
-			var cells: Array
-			var k := 0.8
+			var names: Array
 			if t == WorldMap.FOREST:
-				cells = IsoArt.TREE_CELLS
+				names = IsoArt.TREES
 			elif t == WorldMap.HILLS:
-				cells = IsoArt.ROCK_CELLS
-				k = 0.62
+				names = IsoArt.ROCKS
 			else:
 				continue
 			# Skip the odd tile so a wood thins at its edges rather than ending
@@ -217,18 +221,14 @@ func _paint_clutter() -> void:
 			if randf() < 0.18:
 				continue
 
-			var cell: Vector2i = cells[randi() % cells.size()]
 			var s := Sprite2D.new()
-			s.texture = sheet
-			s.region_enabled = true
-			s.region_rect = Rect2(
-				cell.x * IsoArt.PIXX_CELL, cell.y * IsoArt.PIXX_CELL,
-				IsoArt.PIXX_CELL, IsoArt.PIXX_CELL
+			s.texture = IsoArt.prop_texture(names[randi() % names.size()])
+			# Modelled standing on the origin, so the image centre is where the
+			# prop's feet are: centred placement puts it on the ground.
+			s.centered = true
+			s.position = Iso.to_screen(
+				tx + randf_range(-0.22, 0.22), ty + randf_range(-0.22, 0.22)
 			)
-			s.centered = false
-			s.scale = Vector2(k, k)
-			var q := Iso.to_screen(tx + randf_range(-0.22, 0.22), ty + randf_range(-0.22, 0.22))
-			s.position = Vector2(q.x - IsoArt.PIXX_CELL * k / 2.0, q.y - IsoArt.PIXX_GROUND_Y * k)
 			_entities.add_child(s)
 
 
@@ -249,16 +249,13 @@ func _sync_citizen_nodes() -> void:
 		var s: Sprite2D = _citizen_nodes.get(w["id"])
 		if s == null:
 			s = Sprite2D.new()
-			s.texture = _citizen_sheet
-			s.region_enabled = true
-			s.centered = false
-			s.scale = Vector2(IsoArt.CITIZEN_K, IsoArt.CITIZEN_K)
+			s.centered = true
 			_entities.add_child(s)
 			_citizen_nodes[w["id"]] = s
 		# Walking citizens cycle their frames; standing ones hold one.
 		var frame := int(w["anim"] * 6.0) if w["phase"] != "idle" else 0
-		s.region_rect = IsoArt.citizen_region(w["facing"], frame)
-		s.position = IsoArt.citizen_anchor(Iso.to_screen(w["pos"].x, w["pos"].y))
+		s.texture = _citizen_frames[w["facing"] % 4][frame % 4]
+		s.position = Iso.to_screen(w["pos"].x, w["pos"].y)
 
 	for id in _citizen_nodes.keys():
 		if not seen.has(id):

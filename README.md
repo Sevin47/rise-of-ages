@@ -34,11 +34,17 @@ when nothing is.
 
 ## Making the art
 
-Buildings can be rendered rather than assembled. `art/blender/render_buildings.py`
-defines them as geometry in Python and renders them through one orthographic
-camera under one set of lights:
+Every asset in the Godot build is generated. Buildings, ground tiles, trees,
+rocks and people are all defined as geometry in Python and rendered through one
+orthographic camera under one set of lights:
 
     blender --background --python art/blender/render_buildings.py
+    blender --background --python art/blender/render_world.py
+
+The shared camera, lights and primitives live in `art/blender/isolib.py`, which
+is the only reason a tree looks like it belongs on the same ground as a temple.
+Nothing is third-party any more: the Kenney tiles (CC0) and the 2DPIXX pack
+(CC-BY, attribution required) are both gone, and that obligation with them.
 
 Assembling a building from a tileset is a separate judgement each time about
 which pieces line up, and they drift: a roof overhangs on one and not the next,
