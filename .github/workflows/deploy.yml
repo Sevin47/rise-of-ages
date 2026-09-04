@@ -4,6 +4,12 @@ name: Deploy to GitHub Pages
 # to be built first and the contents of dist/ published. vite.config.ts sets the
 # base path to /rise-of-ages/ for builds, which is what makes asset URLs resolve
 # under the project subpath Pages serves from.
+#
+# The Godot build is exported into dist/godot/ and published in the same
+# artifact. It has to be a no-threads export: the threaded one needs
+# SharedArrayBuffer, which browsers only grant when the server sends COOP and
+# COEP headers, and Pages cannot send custom headers. export_presets.cfg sets
+# variant/thread_support=false for exactly that reason.
 
 on:
   push:
@@ -19,6 +25,9 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
 
 jobs:
   build:
@@ -36,6 +45,41 @@ jobs:
       # tsc runs as part of this, so a type error fails the deploy rather than
       # shipping a broken build.
       - run: npm run build
+
+      # The Godot build ships alongside the Vite one at /godot/, so the site
+      # that works today keeps the root URL. Both versions are then published
+      # from the same dist/ artifact.
+      #
+      # Templates are fetched here rather than committed: the bundle is about a
+      # gigabyte, which has no business in a git repository.
+      - name: Fetch Godot ${{ env.GODOT_VERSION }} and its export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -sSfL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          unzip -q templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+
+      # Importing first is not optional: without it the class_name declarations
+      # are unregistered and the scripts cannot see Content or Sim.
+      - name: Export the Godot build
+        run: |
+          godot="./Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          "$godot" --headless --path godot --import
+          mkdir -p dist/godot
+          "$godot" --headless --path godot --export-release "Web"
+
+      # An export can fail and still leave an exit code of zero, so check that
+      # the files a browser will actually ask for are present.
+      - name: Check the export produced something loadable
+        run: |
+          for f in index.html index.js index.wasm index.pck; do
+            test -s "dist/godot/$f" || { echo "missing or empty: dist/godot/$f"; exit 1; }
+          done
+          ls -lh dist/godot
 
       - uses: actions/configure-pages@v5
 

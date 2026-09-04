@@ -760,6 +760,10 @@ export function renderMenu(saved: GameState | null, ui: UiState): string {
           <span class="menu-item-name">About</span>
           <span class="menu-item-note">Credits and licensing</span>
         </button>
+        <a class="menu-item" href="${import.meta.env.BASE_URL}godot/">
+          <span class="menu-item-name">The isometric version</span>
+          <span class="menu-item-note">Same economy, rebuilt in Godot. Slower to load</span>
+        </a>
       </div>
 
       <div class="menu-keys">

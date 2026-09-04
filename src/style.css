@@ -1205,6 +1205,10 @@ img.icon.inked {
   background: rgba(62, 48, 32, 0.75);
   color: var(--parchment);
   font-family: inherit;
+  /* One of these is an anchor rather than a button, so the two properties a
+     link brings with it have to be put back. */
+  font-size: inherit;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background 0.12s,
