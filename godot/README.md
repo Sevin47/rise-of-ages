@@ -202,6 +202,23 @@ a terrain checksum, worker count, postings and positions, and then that
 
     godot --path godot --script verify_save.gd
 
+### Where the save goes
+
+A file everywhere except the browser, where it is localStorage instead.
+
+Godot mounts `user://` as an IndexedDB filesystem on the web and does not write
+through. After a file closes it waits several seconds *of running main loop*
+before flushing, so a player who closes the tab, switches away, or simply stops
+playing inside that window loses the write and is told nothing. localStorage
+stores it then and there, which is the whole reason for the detour.
+`variant_to_base64` encodes what `store_var` would, so both paths keep the same
+types and the record is identical either way; `verify_save.gd` checks the
+encoding survives a Vector2 and a PackedByteArray without a browser to run in.
+
+Leaving saves by several routes for the same reason. A browser may never send a
+close request, and a tab is usually left rather than closed, so losing focus
+counts too.
+
 Time away is stepped a minute at a time rather than applied as one huge tick,
 because the economy is not linear in dt: caps clamp, stores run dry and
 citizens starve, and one eight-hour tick would skip straight past all of it.
