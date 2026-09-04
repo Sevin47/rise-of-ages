@@ -174,23 +174,51 @@ def textured_material(name, rgb, kind="flat", scale=6.0, amount=None,
     return mat
 
 
-def mesh_from(name, verts, faces, material):
+## A chamfer put on every edge, in world units.
+##
+## The cheapest way to stop geometry reading as a stack of cubes. An unbevelled
+## edge meets two faces at exactly one line and the eye gets no highlight from
+## it; a five-millimetre chamfer catches one all the way along, and the shape
+## stops looking like a voxel and starts looking like an object.
+##
+## Set it to 0.0 around anything whose silhouette has to stay exact.
+AUTO_BEVEL = 0.006
+
+
+def _bevel(obj, width):
+    if not width or width <= 0.0:
+        return obj
+    m = obj.modifiers.new("bevel", "BEVEL")
+    m.width = width
+    m.segments = 2
+    # By angle, so a chamfer lands on the corners of a box and not across the
+    # flat quads of a lathed surface that is already round.
+    m.limit_method = "ANGLE"
+    m.angle_limit = math.radians(40.0)
+    # Small parts here are a few centimetres across, and an unclamped bevel on
+    # one of those turns it inside out.
+    m.use_clamp_overlap = True
+    return obj
+
+
+def mesh_from(name, verts, faces, material, bevel=None, smooth=False):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
     mesh.validate()
-    # Flat shading. Smooth normals on low-poly geometry only blur the edges that
-    # give the silhouette its read at this size.
+    # Flat by default. Smooth normals on a low-poly box only blur the edges that
+    # give the silhouette its read at this size; the lathed shapes ask for
+    # smooth explicitly, because on those the facets are the artefact.
     for poly in mesh.polygons:
-        poly.use_smooth = False
+        poly.use_smooth = smooth
     obj = bpy.data.objects.new(name, mesh)
     obj.data.materials.append(material)
     bpy.context.collection.objects.link(obj)
-    return obj
+    return _bevel(obj, AUTO_BEVEL if bevel is None else bevel)
 
 
 # ---------------------------------------------------------------- primitives
 
-def box(name, size, centre, material):
+def box(name, size, centre, material, bevel=None):
     """An axis-aligned box, `centre` being the middle of its base."""
     sx, sy, sz = size[0] / 2.0, size[1] / 2.0, size[2]
     cx, cy, cz = centre
@@ -202,7 +230,7 @@ def box(name, size, centre, material):
     ]
     f = [(0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2),
          (2, 6, 7, 3), (3, 7, 4, 0)]
-    return mesh_from(name, v, f, material)
+    return mesh_from(name, v, f, material, bevel=bevel)
 
 
 def gable_roof(name, size, centre, height, material, along="y"):
@@ -269,6 +297,103 @@ def cylinder(name, radius, height, centre, material, segments=14, top_radius=Non
     return mesh_from(name, v, f, material)
 
 
+# ---------------------------------------------------------------- organics
+
+def lathe(name, profile, centre, material, segments=16, axis="z", smooth=True,
+          squash=None):
+    """A surface of revolution: spin a 2D profile around an axis.
+
+    `profile` is a list of (radius, height) running bottom to top. A radius of
+    zero closes the end to a point, which is how a sphere gets its poles.
+
+    `squash` stretches the result about `centre` — use it rather than setting
+    `obj.scale`. These meshes are built at absolute coordinates while the
+    object's origin stays at (0, 0, 0), so object scaling happens about the
+    world origin and *moves* the shape as well as resizing it. That cost an
+    afternoon: a head scaled 1.05 in z rose far enough to poke through the hair
+    that was supposed to cover it.
+
+    This one function is where every round shape comes from — sphere, capsule,
+    tapered torso, pot, column, tree trunk — because a profile is a much better
+    way to describe those than a stack of boxes. It is smooth-shaded by default:
+    on a surface that is genuinely curved, the facets are the artefact.
+    """
+    cx, cy, cz = centre
+
+    sx, sy, sz = squash or (1.0, 1.0, 1.0)
+
+    def place(x, y, z):
+        x, y, z = x * sx, y * sy, z * sz
+        if axis == "x":
+            x, y, z = z, y, -x
+        elif axis == "y":
+            x, y, z = x, z, -y
+        return (cx + x, cy + y, cz + z)
+
+    verts, rings = [], []
+    for r, h in profile:
+        if r <= 1e-6:
+            rings.append([len(verts)])
+            verts.append(place(0.0, 0.0, h))
+            continue
+        ring = []
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            ring.append(len(verts))
+            verts.append(place(r * math.cos(a), r * math.sin(a), h))
+        rings.append(ring)
+
+    faces = []
+    for lo, hi in zip(rings, rings[1:]):
+        if len(lo) == 1:                      # closed below, fan upwards
+            for i in range(len(hi)):
+                faces.append((lo[0], hi[i], hi[(i + 1) % len(hi)]))
+        elif len(hi) == 1:                    # closed above
+            for i in range(len(lo)):
+                faces.append((lo[(i + 1) % len(lo)], lo[i], hi[0]))
+        else:
+            for i in range(len(lo)):
+                j = (i + 1) % len(lo)
+                faces.append((lo[i], lo[j], hi[j], hi[i]))
+
+    # Flat caps where an open end was left open.
+    if len(rings[0]) > 1:
+        faces.append(tuple(reversed(rings[0])))
+    if len(rings[-1]) > 1:
+        faces.append(tuple(rings[-1]))
+
+    # Already curved, so a bevel would only chamfer the seams between quads.
+    return mesh_from(name, verts, faces, material, bevel=0.0, smooth=smooth)
+
+
+def sphere(name, radius, centre, material, segments=16, rings=9, squash=None):
+    """Built from `lathe`, so it shades and bevels like every other round thing."""
+    profile = []
+    for i in range(rings + 1):
+        a = math.pi * i / rings          # 0 at the bottom pole to pi at the top
+        profile.append((radius * math.sin(a), -radius * math.cos(a)))
+    return lathe(name, profile, centre, material, segments, squash=squash)
+
+
+def capsule(name, radius, length, centre, material, segments=14, caps=5, axis="z"):
+    """A cylinder with hemispherical ends, measured tip to tip.
+
+    The shape a limb wants. A box limb reads as a plank however it is lit,
+    because the end of a real arm is round and the end of a box is a corner.
+    `centre` is the bottom tip, so a limb still hangs from a known point.
+    """
+    straight = max(0.0, length - 2.0 * radius)
+    profile = []
+    for i in range(caps + 1):             # bottom hemisphere
+        a = math.pi / 2.0 * i / caps
+        profile.append((radius * math.sin(a), radius - radius * math.cos(a)))
+    for i in range(caps + 1):             # top hemisphere
+        a = math.pi / 2.0 * i / caps
+        profile.append((radius * math.cos(a),
+                        radius + straight + radius * math.sin(a)))
+    return lathe(name, profile, centre, material, segments, axis=axis)
+
+
 def diamond(name, size, centre, material, thickness=0.0):
     """A tile: a square in the XY plane, which the camera sees as a 2:1 diamond.
 
@@ -277,11 +402,15 @@ def diamond(name, size, centre, material, thickness=0.0):
     """
     s = size / 2.0
     cx, cy, cz = centre
+    # Never bevelled. A tile's corners are its outline: round them and adjacent
+    # tiles no longer meet, so the ground shows a gap at every junction. It is
+    # also the shape the calibration check measures.
     if thickness <= 0.0:
         v = [(cx - s, cy - s, cz), (cx + s, cy - s, cz),
              (cx + s, cy + s, cz), (cx - s, cy + s, cz)]
-        return mesh_from(name, v, [(0, 1, 2, 3)], material)
-    return box(name, (size, size, thickness), (cx, cy, cz - thickness), material)
+        return mesh_from(name, v, [(0, 1, 2, 3)], material, bevel=0.0)
+    return box(name, (size, size, thickness), (cx, cy, cz - thickness), material,
+               bevel=0.0)
 
 
 # ------------------------------------------------------------------- camera

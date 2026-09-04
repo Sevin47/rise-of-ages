@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import bpy
 
 import isolib
-from isolib import box, cylinder, diamond, pyramid
+from isolib import box, capsule, cylinder, diamond, lathe, pyramid, sphere
 
 OUT_DIR = os.path.join("godot", "assets", "rendered", "world")
 
@@ -166,14 +166,15 @@ FACINGS = [90.0, 180.0, 270.0, 0.0]
 FRAMES = 4
 
 
-def limb(name, width, length, pivot, material, swing):
+def limb(name, radius, length, pivot, material, swing):
     """A limb hanging from its pivot, swung about it.
 
-    Built from the origin downwards so the object's own origin lands on the
-    joint. Rotating the object then rotates about the hip or shoulder, which is
-    what a leg does, rather than about the middle of the thigh.
+    A capsule, not a box. The end of an arm is round and the end of a box is a
+    corner, so a box limb reads as a plank however it is lit. Built from the
+    origin downwards so the object's own origin lands on the joint: rotating it
+    then swings it about the shoulder or hip rather than about its own middle.
     """
-    obj = box(name, (width, width, length), (0.0, 0.0, -length), material)
+    obj = capsule(name, radius, length, (0.0, 0.0, -length), material)
     obj.location = pivot
     obj.rotation_euler = (0.0, math.radians(swing), 0.0)
     return obj
@@ -184,6 +185,12 @@ def citizen(m, facing_deg, frame, tunic="tunic"):
 
     Modelled facing +X and turned as a whole, so the cycle is written once and
     the four facings cannot drift out of step with each other.
+
+    Built from capsules and spheres rather than boxes. At forty pixels the
+    detail is invisible but the *silhouette* is not, and rounded shoulders, a
+    round head and tapered limbs are what stop a figure reading as a stack of
+    cubes. Joints get their own small spheres, which is what makes an arm look
+    attached rather than stuck on.
     """
     phase = 2.0 * math.pi * frame / FRAMES
     swing = math.sin(phase) * 26.0
@@ -194,23 +201,39 @@ def citizen(m, facing_deg, frame, tunic="tunic"):
 
     parts = []
     hip = LEG_L
-    parts.append(limb("leg_l", 0.055, LEG_L, (0.0, 0.045, hip), m["trousers"], swing))
-    parts.append(limb("leg_r", 0.055, LEG_L, (0.0, -0.045, hip), m["trousers"], -swing))
+    parts.append(limb("leg_l", 0.036, LEG_L, (0.0, 0.045, hip), m["trousers"], swing))
+    parts.append(limb("leg_r", 0.036, LEG_L, (0.0, -0.045, hip), m["trousers"], -swing))
 
-    torso = box("torso", (0.10, 0.15, TORSO_H), (0.0, 0.0, hip), m[tunic])
+    # A lathed torso, tapered at the waist and broadest at the chest, then
+    # widened across the body: people are wider than they are deep, and a
+    # surface of revolution is circular until it is told otherwise.
+    torso = lathe("torso", [
+        (0.052, 0.0), (0.058, 0.04), (0.066, 0.10), (0.062, 0.15), (0.050, TORSO_H),
+    ], (0.0, 0.0, hip), m[tunic], squash=(1.0, 1.35, 1.0))
     parts.append(torso)
-    parts.append(box("belt", (0.105, 0.155, 0.022), (0.0, 0.0, hip + 0.02), m["timber"]))
+    parts.append(sphere("hip_j", 0.055, (0.0, 0.0, hip + 0.01), m["trousers"], rings=7))
 
-    shoulder = hip + TORSO_H - 0.02
-    parts.append(limb("arm_l", 0.042, 0.145, (0.0, 0.088, shoulder), m[tunic], arm))
-    parts.append(limb("arm_r", 0.042, 0.145, (0.0, -0.088, shoulder), m[tunic], -arm))
+    shoulder = hip + TORSO_H - 0.03
+    for side, sgn in (("l", 1.0), ("r", -1.0)):
+        parts.append(sphere("sh_%s" % side, 0.030, (0.0, sgn * 0.078, shoulder),
+                            m[tunic], segments=12, rings=7))
+        parts.append(limb("arm_%s" % side, 0.026, 0.15, (0.0, sgn * 0.082, shoulder),
+                          m["skin"], arm * sgn))
 
     neck = hip + TORSO_H
-    parts.append(box("head", (0.085, 0.085, HEAD_R * 2.0), (0.0, 0.0, neck), m["skin"]))
-    parts.append(box("hair", (0.09, 0.09, 0.03), (0.0, 0.0, neck + HEAD_R * 2.0 - 0.012),
-                     m["hair"]))
+    parts.append(capsule("neck", 0.022, 0.05, (0.0, 0.0, neck - 0.02), m["skin"]))
+    parts.append(sphere("head", 0.049, (0.0, 0.0, neck + 0.05), m["skin"],
+                        rings=9, squash=(0.95, 0.92, 1.05)))
+    # Hair as a cap lathed over the crown, not a flattened sphere: a sphere
+    # squashed about its own centre ends up inside the skull, and the first
+    # attempt rendered every citizen bald.
+    parts.append(lathe("hair", [
+        (0.058, 0.0), (0.060, 0.014), (0.058, 0.032), (0.050, 0.048),
+        (0.034, 0.062), (0.0, 0.072),
+    ], (0.0, 0.0, neck + 0.038), m["hair"], segments=14))
     # A nose, purely so the facing is readable at this size.
-    parts.append(box("brow", (0.02, 0.05, 0.02), (0.045, 0.0, neck + 0.05), m["skin"]))
+    parts.append(sphere("nose", 0.014, (0.043, 0.0, neck + 0.052), m["skin"],
+                        segments=8, rings=5))
 
     # Turn the whole figure at once. Parenting before rotating means the parts
     # keep the local transforms they were built with.
