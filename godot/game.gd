@@ -136,11 +136,22 @@ func _process(delta: float) -> void:
 		SaveGame.write(state, world, units)
 
 
-## Closing the window is the commonest way to stop playing, so it saves.
+## Stopping playing saves, by whichever route the platform reports.
+##
+## A browser is the reason there is more than one. It may never deliver a close
+## request at all, and a tab is usually left rather than closed, so losing focus
+## has to count too: switching away is how most web sessions end.
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		SaveGame.write(state, world, units)
-		get_tree().quit()
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			SaveGame.write(state, world, units)
+			get_tree().quit()
+		NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+			# _ready may not have finished, and a half-built game is worse than
+			# no save at all.
+			if world != null and units != null:
+				_since_save = 0.0
+				SaveGame.write(state, world, units)
 
 
 ## Save and hand the screen back to the menu.

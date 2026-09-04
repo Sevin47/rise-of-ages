@@ -96,6 +96,28 @@ func _init() -> void:
 	check("derived caps", is_equal_approx(d1["caps"]["food"], d2["caps"]["food"]))
 	check("build slots used", is_equal_approx(d1["build_used"], d2["build_used"]))
 
+	# --- the web storage path --------------------------------------------
+	# On the web the record goes through base64 into localStorage rather than
+	# through store_var into a file. There is no browser here, but the encoding
+	# is the part that could silently mangle a Vector2 or a PackedByteArray, and
+	# that can be exercised anywhere.
+	print("web encoding")
+	var record := SaveGame.build_record(game.state, game.world, game.units)
+	var encoded := Marshalls.variant_to_base64(record, true)
+	var decoded = Marshalls.base64_to_variant(encoded, true)
+	check("round-trips", typeof(decoded) == TYPE_DICTIONARY)
+	check("terrain survives",
+		decoded["terrain"] is PackedByteArray and decoded["terrain"] == record["terrain"],
+		"%d bytes" % decoded["terrain"].size())
+	check("positions stay Vector2",
+		decoded["people"][0]["pos"] is Vector2
+			and decoded["people"][0]["pos"].is_equal_approx(record["people"][0]["pos"]))
+	check("placements survive", decoded["placements"].size() == record["placements"].size())
+	check("economy survives",
+		is_equal_approx(decoded["state"]["citizens"], record["state"]["citizens"]))
+	check("fits in localStorage", encoded.length() < 5 * 1024 * 1024,
+		"%.1f KB encoded" % (encoded.length() / 1024.0))
+
 	# And time away should be credited, at half rate.
 	#
 	# Drain the larder first. Left full it sits at the cap, and catch-up has
