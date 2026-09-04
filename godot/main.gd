@@ -88,10 +88,14 @@ func _build_menu() -> void:
 	new_btn.pressed.connect(_on_new_pressed)
 	col.add_child(new_btn)
 
-	var quit_btn := Button.new()
-	quit_btn.text = "Quit"
-	quit_btn.pressed.connect(func(): get_tree().quit())
-	col.add_child(quit_btn)
+	# Not on the web. Quitting there ends the process behind a canvas that stays
+	# on screen, so the button's only effect is to leave the player looking at a
+	# dead page with no way back except a reload.
+	if not OS.has_feature("web"):
+		var quit_btn := Button.new()
+		quit_btn.text = "Quit"
+		quit_btn.pressed.connect(func(): get_tree().quit())
+		col.add_child(quit_btn)
 
 	var keys := Label.new()
 	keys.text = "Drag to pan, wheel to zoom, arrows to scroll. Esc returns here."
